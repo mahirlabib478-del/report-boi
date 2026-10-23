@@ -160,6 +160,158 @@ private fun monthDays(root: JSONObject, month: String): List<Pair<String, Map<St
 private fun totalFor(root: JSONObject, month: String, key: String): Double =
     monthDays(root, month).sumOf { it.second[key]?.toDoubleOrNull() ?: 0.0 }
 
+private data class SummarySection(val title: String, val rows: List<Pair<String, String>>)
+
+private fun dailyTotal(days: List<Pair<String, Map<String, String>>>, key: String): Double =
+    days.sumOf { it.second[key]?.toDoubleOrNull() ?: 0.0 }
+
+private fun dailyTotal(days: List<Pair<String, Map<String, String>>>, keys: List<String>): Double =
+    days.sumOf { item -> keys.sumOf { item.second[it]?.toDoubleOrNull() ?: 0.0 } }
+
+private fun activeDays(days: List<Pair<String, Map<String, String>>>, key: String): Int =
+    days.count { (it.second[key]?.toDoubleOrNull() ?: 0.0) > 0.0 }
+
+private fun checkedDays(days: List<Pair<String, Map<String, String>>>, key: String): Int =
+    days.count { it.second[key] == "true" }
+
+private fun averageText(days: List<Pair<String, Map<String, String>>>, key: String, unit: String): String {
+    val count = activeDays(days, key)
+    return if (count == 0) "—" else numberBn(dailyTotal(days, key) / count) + " " + unit
+}
+
+private fun distinctDailyText(days: List<Pair<String, Map<String, String>>>, key: String): String =
+    days.mapNotNull { it.second[key]?.trim()?.takeIf { value -> value.isNotEmpty() } }
+        .distinct().joinToString("، ")
+
+private fun monthlySnapshotSections(
+    days: List<Pair<String, Map<String, String>>>,
+    plan: Map<String, String>
+): List<SummarySection> {
+    val result = mutableListOf<SummarySection>()
+    fun add(title: String, rows: List<Pair<String, String>>) {
+        result += SummarySection(title, rows)
+    }
+    fun value(key: String): String = plan[key]?.trim().orEmpty()
+    fun addPlanRow(rows: MutableList<Pair<String, String>>, label: String, key: String, unit: String = "") {
+        val v = value(key)
+        if (v.isNotBlank()) rows += label to (v + if (unit.isNotBlank()) " " + unit else "")
+    }
+    fun textOrDaily(planKey: String, dailyKey: String): String =
+        value(planKey).ifBlank { distinctDailyText(days, dailyKey) }.ifBlank { "—" }
+
+    val quran = mutableListOf<Pair<String, String>>()
+    quran += "মোট দিন" to (numberBn(activeDays(days, "quranAyat")) + " দিন")
+    quran += "গড় আয়াত" to averageText(days, "quranAyat", "আয়াত/দিন")
+    quran += "সূরার নাম" to textOrDaily("quranSurahNames", "quranSurah")
+    quran += "দারস প্রস্তুত" to (numberBn(dailyTotal(days, "quranDarsDone")) + " টি")
+    quran += "মুখস্থ আয়াত" to (numberBn(dailyTotal(days, "quranMemorized")) + " আয়াত")
+    addPlanRow(quran, "অর্থসহ সূরা", "quranMeaningSurah")
+    add("কুরআন অধ্যয়ন", quran)
+
+    val hadith = mutableListOf<Pair<String, String>>()
+    hadith += "মোট দিন" to (numberBn(activeDays(days, "hadithCount")) + " দিন")
+    hadith += "গড় হাদিস" to averageText(days, "hadithCount", "টি/দিন")
+    hadith += "গ্রন্থ / বিষয়" to textOrDaily("hadithBooks", "hadithTopic")
+    hadith += "দারস প্রস্তুত" to (numberBn(dailyTotal(days, "hadithDarsDone")) + " টি")
+    hadith += "মুখস্থ হাদিস" to (numberBn(dailyTotal(days, "hadithMemorized")) + " টি")
+    addPlanRow(hadith, "বিষয়", "hadithSubject")
+    add("হাদিস অধ্যয়ন", hadith)
+
+    val literature = mutableListOf<Pair<String, String>>()
+    val islamicPages = dailyTotal(days, "literatureIslamic")
+    val otherPages = dailyTotal(days, "literatureOther")
+    literature += "মোট পৃষ্ঠা" to (numberBn(islamicPages + otherPages) + " পৃষ্ঠা")
+    literature += "ইসলামী সাহিত্য" to (numberBn(islamicPages) + " পৃষ্ঠা")
+    literature += "অন্যান্য সাহিত্য" to (numberBn(otherPages) + " পৃষ্ঠা")
+    addPlanRow(literature, "বইয়ের নাম", "literatureBooks")
+    addPlanRow(literature, "বই নোট", "bookNotes", "টি")
+    addPlanRow(literature, "আলোচনা নোট", "discussionNotes", "টি")
+    add("সাহিত্য অধ্যয়ন", literature)
+
+    val studyPrayer = mutableListOf<Pair<String, String>>()
+    studyPrayer += "পড়াশোনার মোট দিন" to (numberBn(activeDays(days, "textbookHours")) + " দিন")
+    studyPrayer += "গড় পড়াশোনা" to averageText(days, "textbookHours", "ঘণ্টা/দিন")
+    studyPrayer += "মোট ক্লাস" to (numberBn(dailyTotal(days, "classesTotal")) + " টি")
+    studyPrayer += "উপস্থিত ক্লাস" to (numberBn(dailyTotal(days, "classesAttended")) + " টি")
+    studyPrayer += "জামাতে নামাজ" to (numberBn(dailyTotal(days, "jamaat")) + " ওয়াক্ত")
+    studyPrayer += "কাজা নামাজ" to (numberBn(dailyTotal(days, "qaza")) + " ওয়াক্ত")
+    add("পাঠ্যপুস্তক অধ্যয়ন ও নামাজ", studyPrayer)
+
+    val contactRows = mutableListOf<Pair<String, String>>()
+    listOf(
+        "contactMember" to "সদস্য", "contactSathi" to "সাথী", "contactWorker" to "কর্মী",
+        "contactSupporter" to "সমর্থক", "contactFriend" to "বন্ধু", "contactWellWisher" to "শুভাকাঙ্ক্ষী",
+        "contactSchoolStudent" to "স্কুলছাত্র", "contactTalentedStudent" to "মেধাবী ছাত্র",
+        "contactTeacher" to "শিক্ষক", "contactMuharrama" to "মুহাররমা", "contactVIP" to "ভিআইপি"
+    ).forEach { (key, label) -> contactRows += label to (numberBn(dailyTotal(days, key)) + " জন") }
+    add("যোগাযোগ", contactRows)
+
+    val dawahDays = activeDays(days, "dawahHours")
+    val otherOrgDays = activeDays(days, "otherOrgHours")
+    val orgDays = days.count {
+        (it.second["dawahHours"]?.toDoubleOrNull() ?: 0.0) > 0.0 ||
+            (it.second["otherOrgHours"]?.toDoubleOrNull() ?: 0.0) > 0.0
+    }
+    val orgHours = dailyTotal(days, listOf("dawahHours", "otherOrgHours"))
+    val orgRows = mutableListOf<Pair<String, String>>()
+    orgRows += "মোট দিন" to (numberBn(orgDays) + " দিন")
+    orgRows += "গড় সময়" to (if (orgDays == 0) "—" else numberBn(orgHours / orgDays) + " ঘণ্টা/দিন")
+    orgRows += "দাওয়াতি কাজ" to (numberBn(dawahDays) + " দিন")
+    orgRows += "দাওয়াতি কাজের গড় সময়" to averageText(days, "dawahHours", "ঘণ্টা/দিন")
+    orgRows += "অন্যান্য সাংগঠনিক কাজ" to (numberBn(otherOrgDays) + " দিন")
+    orgRows += "অন্যান্য কাজের গড় সময়" to averageText(days, "otherOrgHours", "ঘণ্টা/দিন")
+    orgRows += "গ্রুপ দাওয়াতি কাজ" to (numberBn(dailyTotal(days, "groupDawahCount")) + " বার")
+    orgRows += "দাওয়াতি মেসেজ" to (numberBn(dailyTotal(days, "dawahMessageCount")) + " টি")
+    orgRows += "দাওয়াতি ই-মেইল" to (numberBn(dailyTotal(days, "dawahEmailCount")) + " টি")
+    add("সাংগঠনিক দায়িত্ব পালন", orgRows)
+
+    val distributionRows = mutableListOf<Pair<String, String>>()
+    listOf(
+        "distIslamicLiterature" to "ইসলামী সাহিত্য", "distKishoreMagazine" to "কিশোর পত্রিকা",
+        "distYW" to "Y.W.", "distStudentNews" to "ছাত্রসংবাদ", "distEnglishMagazine" to "ইংরেজি পত্রিকা",
+        "distIntro" to "পরিচিতি", "distClassRoutine" to "ক্লাস রুটিন", "distStickerCard" to "স্টিকার/কার্ড",
+        "distGiftMessageEmail" to "উপহার/মেসেজ/ই-মেইল"
+    ).forEach { (key, label) -> distributionRows += label to (numberBn(dailyTotal(days, key)) + " টি") }
+    add("বিতরণ", distributionRows)
+
+    val growthRows = mutableListOf<Pair<String, String>>()
+    listOf(
+        "growthMember" to "সদস্য", "growthCandidate" to "সদস্যপ্রার্থী", "growthSathi" to "সাথী",
+        "growthSathiCandidate" to "সাথীপ্রার্থী", "growthWorker" to "কর্মী", "growthSupporter" to "সমর্থক",
+        "growthFriend" to "বন্ধু", "growthWellWisher" to "শুভাকাঙ্ক্ষী"
+    ).forEach { (key, label) -> addPlanRow(growthRows, label, key, "জন") }
+    if (growthRows.isEmpty()) growthRows += "তথ্য" to "মাসিক পরিকল্পনায় তথ্য দেওয়া হয়নি"
+    add("বৃদ্ধি", growthRows)
+
+    val financeRows = mutableListOf<Pair<String, String>>()
+    addPlanRow(financeRows, "পরিশোধের তারিখ", "financePaymentDate")
+    addPlanRow(financeRows, "ব্যক্তিগত বৃদ্ধি", "financePersonalGrowth", "টাকা")
+    addPlanRow(financeRows, "মোট বৃদ্ধি", "financeTotalGrowth", "টাকা")
+    addPlanRow(financeRows, "ছাত্রকল্যাণ", "financeStudentWelfare", "টাকা")
+    addPlanRow(financeRows, "টেবিল ব্যাংক", "financeTableBank", "টাকা")
+    addPlanRow(financeRows, "কলসি/হাঁড়ি", "financePotCount", "টি")
+    if (financeRows.isEmpty()) financeRows += "তথ্য" to "মাসিক পরিকল্পনায় তথ্য দেওয়া হয়নি"
+    add("বায়তুলমাল / আর্থিক হিসাব", financeRows)
+
+    val miscRows = mutableListOf<Pair<String, String>>()
+    miscRows += "আত্মসমালোচনা" to (numberBn(checkedDays(days, "selfReviewDone")) + " দিন")
+    miscRows += "শরীরচর্চা" to (numberBn(checkedDays(days, "exerciseDone")) + " দিন")
+    miscRows += "পত্রিকা পাঠ" to (numberBn(checkedDays(days, "magazineRead")) + " দিন")
+    miscRows += "আত্মীয়স্বজনের সঙ্গে যোগাযোগ" to (numberBn(dailyTotal(days, "relativesContacts")) + " জন")
+    miscRows += "অমুসলিম বন্ধু যোগাযোগ" to (numberBn(dailyTotal(days, "nonMuslimContacts")) + " জন")
+    miscRows += "বন্ধু সংগঠনের সঙ্গে যোগাযোগ" to (numberBn(dailyTotal(days, "orgContacts")) + " জন/সংগঠন")
+    miscRows += "কম্পিউটার শিক্ষা" to (numberBn(activeDays(days, "computerStudyHours")) + " দিন")
+    miscRows += "ভাষা শিক্ষা" to (numberBn(activeDays(days, "languageStudyHours")) + " দিন")
+    miscRows += "দায়িত্বশীলকে রিপোর্ট" to (numberBn(checkedDays(days, "reportGiven")) + " বার")
+    val reportDate = days.lastOrNull { it.second["reportGiven"] == "true" }?.first
+    if (reportDate != null) miscRows += "সর্বশেষ রিপোর্টের তারিখ" to reportDate
+    val otherActivities = distinctDailyText(days, "otherActivities").ifBlank { value("otherActivities") }
+    if (otherActivities.isNotBlank()) miscRows += "অন্যান্য" to otherActivities
+    add("বিবিধ", miscRows)
+
+    return result
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -562,6 +714,15 @@ private fun ReportScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         PageHeading("দৈনিক ও মাসিক রিপোর্ট", monthLabel(month) + " · " + numberBn(days.size) + " দিনের রেকর্ড")
 
+        SectionCard("একনজরে মাসিক রিপোর্ট", "দৈনিক হিসাব থেকে মোট ও গড় স্বয়ংক্রিয়ভাবে হিসাব করা হয়েছে") {
+            monthlySnapshotSections(days, plan).forEach { section ->
+                Text(section.title, color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+                section.rows.forEach { (label, value) -> ReportRow(label, value) }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+
         SectionCard("তারিখভিত্তিক রিপোর্ট", "প্রতিটি তারিখের রিপোর্ট আলাদা করে দেখুন, PDF করুন বা প্রিন্ট করুন") {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
@@ -772,6 +933,13 @@ private object PdfReport {
         writer.text("মাস: " + monthLabel(month), 12f, true, Forest.toArgb())
         writer.text("ব্যবহারকারী: ব্যক্তিগত হিসাব", 10f, false, Muted.toArgb())
         writer.text("রেকর্ড: " + numberBn(days.size) + " দিন  |  কুরআন: " + numberBn(days.sumOf { it.second["quranAyat"]?.toDoubleOrNull() ?: 0.0 }) + " আয়াত  |  হাদিস: " + numberBn(days.sumOf { it.second["hadithCount"]?.toDoubleOrNull() ?: 0.0 }) + " টি", 10f)
+        writer.space(8f)
+        writer.section("একনজরে মাসিক রিপোর্ট")
+        monthlySnapshotSections(days, plan).forEach { section ->
+            writer.subheading(section.title)
+            section.rows.forEach { (label, value) -> writer.row(label, value) }
+            writer.space(3f)
+        }
         writer.space(8f)
         writer.section("মাসিক পরিকল্পনা")
         var anyPlan = false

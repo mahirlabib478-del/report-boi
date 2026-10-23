@@ -439,7 +439,7 @@ private fun ReportBoiApp() {
                         )
                         Button(
                             onClick = {
-                                if (Regex("\\d{4}-\\d{2}").matches(monthInput) && monthInput.substring(5, 7).toIntOrNull() in 1..12) selectedMonth = monthInput
+                                if (Regex("\\d{4}-\\d{2}").matches(monthInput) && (monthInput.substring(5, 7).toIntOrNull()?.let { it in 1..12 } == true)) selectedMonth = monthInput
                                 else Toast.makeText(context, "মাস YYYY-MM ফরম্যাটে লিখুন", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.height(52.dp),

@@ -85,9 +85,9 @@ export default function App(){
 
   const updateMember=(fn)=>setData(prev=>({...prev,members:prev.members.map(m=>m.id===prev.activeMemberId?fn(m):m)}));
   const savePlan=()=>{updateMember(m=>({...m,plans:{...(m.plans||{}),[month]:planDraft}}));Alert.alert('সংরক্ষণ হয়েছে','মাসিক পরিকল্পনা এই ফোনে সংরক্ষিত হয়েছে।');};
-  const saveDaily=()=>{if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)){Alert.alert('তারিখ ঠিক নয়','YYYY-MM-DD ফরম্যাটে তারিখ লিখুন।');return;}updateMember(m=>({...m,days:{...(m.days||{}),[day]:dailyDraft}}));Alert.alert('সংরক্ষণ হয়েছে',day+' তারিখের হিসাব সংরক্ষিত হয়েছে।');};
-  const openMonth=()=>{if(!/^\\d{4}-\\d{2}$/.test(monthText)){Alert.alert('মাস ঠিক নয়','YYYY-MM ফরম্যাটে লিখুন, যেমন 2026-10।');return;}setMonth(monthText);setTab('home');};
-  const openDay=()=>{if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(dayText)){Alert.alert('তারিখ ঠিক নয়','YYYY-MM-DD ফরম্যাটে লিখুন।');return;}setDay(dayText);};
+  const saveDaily=()=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(day)){Alert.alert('তারিখ ঠিক নয়','YYYY-MM-DD ফরম্যাটে তারিখ লিখুন।');return;}updateMember(m=>({...m,days:{...(m.days||{}),[day]:dailyDraft}}));Alert.alert('সংরক্ষণ হয়েছে',day+' তারিখের হিসাব সংরক্ষিত হয়েছে।');};
+  const openMonth=()=>{if(!/^\d{4}-\d{2}$/.test(monthText)){Alert.alert('মাস ঠিক নয়','YYYY-MM ফরম্যাটে লিখুন, যেমন 2026-10।');return;}setMonth(monthText);setTab('home');};
+  const openDay=()=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(dayText)){Alert.alert('তারিখ ঠিক নয়','YYYY-MM-DD ফরম্যাটে লিখুন।');return;}setDay(dayText);};
   const addMember=()=>{const name=newName.trim();if(!name){Alert.alert('নাম লিখুন','নতুন সদস্যের নাম লিখুন।');return;}const m={id:String(Date.now())+String(Math.floor(Math.random()*1000)),name,role:newRole,plans:{},days:{}};setData(prev=>({...prev,members:[...prev.members,m],activeMemberId:m.id}));setNewName('');setTab('home');};
   const selectMember=(id)=>{setData(prev=>({...prev,activeMemberId:id}));setTab('home');};
 

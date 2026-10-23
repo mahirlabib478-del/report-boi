@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -458,7 +459,7 @@ private fun FieldGroupCard(group: FieldGroup, values: Map<String, String>, onCha
         group.fields.forEachIndexed { index, field ->
             if (field.type == FieldType.CHECK) {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
-                    onChange(values + (field.key to if (values[field.key] == "true") "false" else "true"))
+                    onChange(values + (field.key to (if (values[field.key] == "true") "false" else "true")))
                 }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = values[field.key] == "true", onCheckedChange = { onChange(values + (field.key to it.toString())) })
                     Text(field.label, color = Ink, fontSize = 13.sp)

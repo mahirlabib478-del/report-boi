@@ -825,6 +825,12 @@ private fun DailyScreen(
 ) {
     val isPastDate = date < todayIso()
     val hasSavedRecord = savedRecordExists
+    val totalDailyFields = dailyGroups.sumOf { it.fields.size }.coerceAtLeast(1)
+    val completedDailyFields = dailyGroups.sumOf { group -> group.fields.count { field ->
+        val value = values[field.key].orEmpty()
+        if (field.type == FieldType.CHECK) value == "true" else value.isNotBlank()
+    } }
+    val dailyProgress = (completedDailyFields.toFloat() / totalDailyFields.toFloat()).coerceIn(0f, 1f)
     var showClearConfirmation by remember(date) { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -855,7 +861,16 @@ private fun DailyScreen(
                         Text("পরের দিন →", fontSize = 12.sp, maxLines = 1)
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("ফর্ম পূরণ", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        Text("${numberBn(completedDailyFields)} / ${numberBn(totalDailyFields)}", color = Forest, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                    Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(50.dp)).background(Border)) {
+                        Box(Modifier.fillMaxWidth(fraction = dailyProgress).fillMaxHeight().background(Green))
+                    }
+                }
+                Spacer(Modifier.height(9.dp))
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isPastDate) Mint else CanvasBg).padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1125,16 +1140,34 @@ private fun ReportScreen(
 }
 @Composable
 private fun ReportRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-        Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        Text(value.ifBlank { "—" }, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Muted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f))
+        Text(
+            value.ifBlank { "—" },
+            color = Forest,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            textAlign = TextAlign.End,
+            modifier = Modifier.widthIn(max = 180.dp).clip(RoundedCornerShape(9.dp))
+                .background(Mint).padding(horizontal = 9.dp, vertical = 6.dp)
+        )
     }
-    Divider(color = Border.copy(alpha = .75f))
+    Divider(color = Border.copy(alpha = .72f))
 }
-
 @Composable
 private fun PrimaryAction(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(15.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp, pressedElevation = 0.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+    ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(19.dp))
         Spacer(Modifier.width(9.dp))
         Text(title, fontWeight = FontWeight.Bold)
@@ -1143,8 +1176,14 @@ private fun PrimaryAction(title: String, icon: androidx.compose.ui.graphics.vect
 
 @Composable
 private fun SecondaryAction(title: String, onClick: () -> Unit, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(49.dp), shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(49.dp),
+        shape = RoundedCornerShape(15.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+    ) {
         if (icon != null) { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
         Text(title, fontWeight = FontWeight.Bold)
     }

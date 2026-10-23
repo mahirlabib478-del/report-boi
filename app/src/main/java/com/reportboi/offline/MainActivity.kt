@@ -450,8 +450,6 @@ private fun ReportBoiApp() {
                     }
                 }
             },
-
-            },
             bottomBar = {
                 NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
                     navItems.forEachIndexed { index, item ->

@@ -74,7 +74,7 @@ export default function App(){
   const [newRole,setNewRole]=useState('সদস্য');
   const [storageError,setStorageError]=useState(false);
 
-  useEffect(()=>{(async()=>{try{const info=await FileSystem.getInfoAsync(DATA_FILE);if(info.exists)setData(normalize(JSON.parse(await FileSystem.readAsStringAsync(DATA_FILE)));}catch(e){setStorageError(true);}setLoaded(true);})();},[]);
+  useEffect(()=>{(async()=>{try{const info=await FileSystem.getInfoAsync(DATA_FILE);if(info.exists)setData(normalize(JSON.parse(await FileSystem.readAsStringAsync(DATA_FILE))));}catch(e){setStorageError(true);}setLoaded(true);})();},[]);
   useEffect(()=>{if(loaded)FileSystem.writeAsStringAsync(DATA_FILE,JSON.stringify(data)).catch(()=>setStorageError(true));},[data,loaded]);
 
   const member=useMemo(()=>data.members.find(m=>m.id===data.activeMemberId)||data.members[0], [data]);

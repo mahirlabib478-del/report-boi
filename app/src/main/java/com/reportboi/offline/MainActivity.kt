@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Print
@@ -52,6 +54,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -65,13 +68,14 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val Forest = Color(0xFF145A43)
-private val Green = Color(0xFF1D7959)
-private val Mint = Color(0xFFE8F5ED)
-private val CanvasBg = Color(0xFFF4F7F4)
-private val Ink = Color(0xFF20382D)
-private val Muted = Color(0xFF6C7D73)
-private val Border = Color(0xFFDCE7DF)
+private val Forest = Color(0xFF174A38)
+private val Green = Color(0xFF25845B)
+private val Mint = Color(0xFFEAF3E8)
+private val CanvasBg = Color(0xFFF7F6EF)
+private val Ink = Color(0xFF20352B)
+private val Muted = Color(0xFF68786D)
+private val Border = Color(0xFFE1E7DE)
+private val SoftGold = Color(0xFFD8B777)
 private const val PREFS = "report_boi_local"
 private const val DATA_KEY = "report_data"
 
@@ -133,6 +137,18 @@ private fun shiftIsoDate(date: String, offsetDays: Int): String {
     return if (result > todayIso()) todayIso() else result
 }
 private fun currentMonth(): String = todayIso().take(7)
+private fun daysInMonth(month: String): Int {
+    val parts = month.split("-")
+    if (parts.size != 2) return 30
+    val year = parts[0].toIntOrNull() ?: return 30
+    val monthNumber = parts[1].toIntOrNull() ?: return 30
+    if (monthNumber !in 1..12) return 30
+    return Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, monthNumber - 1)
+        set(Calendar.DAY_OF_MONTH, 1)
+    }.getActualMaximum(Calendar.DAY_OF_MONTH)
+}
 private fun monthLabel(month: String): String = try {
     val date = SimpleDateFormat("yyyy-MM", Locale.US).parse(month) ?: Date()
     SimpleDateFormat("MMMM yyyy", Locale("bn", "BD")).format(date)
@@ -380,61 +396,75 @@ private fun ReportBoiApp() {
         primary = Forest, onPrimary = Color.White, secondary = Green, onSecondary = Color.White,
         background = CanvasBg, surface = Color.White, onSurface = Ink, onBackground = Ink,
         primaryContainer = Mint, onPrimaryContainer = Forest, outline = Border
+    ), shapes = Shapes(
+        extraSmall = RoundedCornerShape(8.dp),
+        small = RoundedCornerShape(12.dp),
+        medium = RoundedCornerShape(16.dp),
+        large = RoundedCornerShape(22.dp),
+        extraLarge = RoundedCornerShape(28.dp)
     )) {
         Scaffold(
             containerColor = CanvasBg,
             topBar = {
-                Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 17.dp, vertical = 12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
-                            Text("📘", fontSize = 23.sp)
+                Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 16.dp, vertical = 9.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Assessment, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                         }
-                        Column(Modifier.weight(1f)) {
-                            Text("রিপোর্ট বই", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text("রিপোর্ট বই", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
                             Text("ব্যক্তিগত পরিকল্পনা ও হিসাব", color = Color.White.copy(alpha = .78f), fontSize = 11.sp)
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFFBFE9D0), modifier = Modifier.size(21.dp))
-                            Text("অফলাইন", color = Color.White.copy(alpha = .86f), fontSize = 10.sp)
+                        Column(Modifier.clip(RoundedCornerShape(50.dp)).background(Color.White.copy(alpha = .12f)).padding(horizontal = 10.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFFBFE9D0), modifier = Modifier.size(17.dp))
+                            Text("অফলাইন", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.height(9.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color.White.copy(alpha = .92f), modifier = Modifier.size(20.dp))
                         OutlinedTextField(
                             value = monthInput,
                             onValueChange = { monthInput = it },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).height(52.dp),
                             singleLine = true,
-                            label = { Text("রিপোর্টের মাস", color = Color.White.copy(alpha = .8f)) },
-                            placeholder = { Text("YYYY-MM") },
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = Color.White),
-                            shape = RoundedCornerShape(12.dp),
+                            placeholder = { Text("YYYY-MM", color = Color.White.copy(alpha = .62f), fontSize = 13.sp) },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium),
+                            shape = RoundedCornerShape(14.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.White, unfocusedBorderColor = Color.White.copy(alpha = .45f),
-                                cursorColor = Color.White, focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                                focusedBorderColor = Color.White, unfocusedBorderColor = Color.White.copy(alpha = .36f),
+                                cursorColor = Color.White, focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                                focusedContainerColor = Color.White.copy(alpha = .05f), unfocusedContainerColor = Color.White.copy(alpha = .03f)
                             )
                         )
                         Button(
                             onClick = {
-                                if (Regex("\\d{4}-\\d{2}").matches(monthInput)) selectedMonth = monthInput
+                                if (Regex("\\d{4}-\\d{2}").matches(monthInput) && monthInput.substring(5, 7).toIntOrNull() in 1..12) selectedMonth = monthInput
                                 else Toast.makeText(context, "মাস YYYY-MM ফরম্যাটে লিখুন", Toast.LENGTH_SHORT).show()
                             },
+                            modifier = Modifier.height(52.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Forest),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 17.dp, vertical = 10.dp)
                         ) { Text("সেট", fontWeight = FontWeight.Bold) }
                     }
                 }
             },
+
+            },
             bottomBar = {
-                NavigationBar(containerColor = Color.White) {
+                NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
                     navItems.forEachIndexed { index, item ->
                         NavigationBarItem(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            icon = { Icon(item.icon, contentDescription = item.title) },
-                            label = { Text(item.title, fontSize = 11.sp) },
-                            alwaysShowLabel = true
+                            icon = { Icon(item.icon, contentDescription = item.title, modifier = Modifier.size(22.dp)) },
+                            label = { Text(item.title, fontSize = 11.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium) },
+                            alwaysShowLabel = true,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Forest, selectedTextColor = Forest, indicatorColor = Mint,
+                                unselectedIconColor = Muted, unselectedTextColor = Muted
+                            )
                         )
                     }
                 }
@@ -630,74 +660,103 @@ private fun ReportBoiApp() {
 
 @Composable
 private fun HomeScreen(month: String, root: JSONObject, onDaily: () -> Unit, onPlan: () -> Unit, onReport: () -> Unit, onOpenDay: (String) -> Unit) {
-    val days = monthDays(root, month)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Card(colors = CardDefaults.cardColors(containerColor = Green), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp)) {
-                Text("স্বাগতম 👋", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
-                Text("আপনার মাস, আপনার অগ্রগতি", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                Text(monthLabel(month), color = Color.White.copy(alpha = .86f), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                Spacer(Modifier.height(17.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryMini("রেকর্ড", numberBn(days.size), Modifier.weight(1f))
-                    SummaryMini("কুরআন", numberBn(totalFor(root, month, "quranAyat")), Modifier.weight(1f))
-                    SummaryMini("হাদিস", numberBn(totalFor(root, month, "hadithCount")), Modifier.weight(1f))
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text("দ্রুত কাজ", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Spacer(Modifier.height(9.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickCard("দৈনিক হিসাব", "আজ বা আগের দিনের কাজ", Icons.Default.EditNote, onDaily, Modifier.weight(1f))
-            QuickCard("মাসিক পরিকল্পনা", "লক্ষ্য নির্ধারণ", Icons.Default.CalendarMonth, onPlan, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        QuickCard("মাসিক রিপোর্ট", "মোট হিসাব, PDF ও প্রিন্ট", Icons.Default.Assessment, onReport, Modifier.fillMaxWidth())
-        Spacer(Modifier.height(17.dp))
-        SectionCard("সাম্প্রতিক হিসাব", "এই মাসের সর্বশেষ ৫টি রেকর্ড") {
-            if (days.isEmpty()) Text("এখনো কোনো দৈনিক হিসাব নেই। “দৈনিক” ট্যাব থেকে শুরু করুন।", color = Muted, fontSize = 13.sp)
-            else days.takeLast(5).asReversed().forEach { item ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).clickable { onOpenDay(item.first) }
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(9.dp)
-                ) {
-                    Icon(Icons.Default.EditNote, contentDescription = "রিপোর্ট সম্পাদনা", tint = Green, modifier = Modifier.size(21.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · পড়াশোনা " + numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
+    val days = remember(root, month) { monthDays(root, month) }
+    val monthLength = daysInMonth(month).coerceAtLeast(1)
+    val coverage = (days.size.toFloat() / monthLength.toFloat()).coerceIn(0f, 1f)
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item(key = "home_hero") {
+            Card(colors = CardDefaults.cardColors(containerColor = Forest), shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(19.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("আপনার ব্যক্তিগত ড্যাশবোর্ড", color = Color.White.copy(alpha = .76f), fontSize = 11.sp)
+                            Text("আপনার মাস, আপনার অগ্রগতি", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(monthLabel(month), color = Color.White.copy(alpha = .84f), fontSize = 12.sp)
+                        }
+                        Box(Modifier.size(46.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Assessment, contentDescription = null, tint = Color.White, modifier = Modifier.size(25.dp))
+                        }
                     }
-                    Text("খুলুন", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Divider(color = Color.White.copy(alpha = .17f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("মাসিক রিপোর্ট কভারেজ", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
+                            Text("${numberBn(days.size)} / ${numberBn(monthLength)} দিন", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text("${(coverage * 100).toInt()}%", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    LinearProgressIndicator(progress = { coverage }, modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(50.dp)), color = Color(0xFFA7D9B8), trackColor = Color.White.copy(alpha = .16f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryMini("কুরআন", numberBn(totalFor(root, month, "quranAyat")), Modifier.weight(1f))
+                        SummaryMini("হাদিস", numberBn(totalFor(root, month, "hadithCount")), Modifier.weight(1f))
+                        SummaryMini("পড়াশোনা", numberBn(totalFor(root, month, "textbookHours")) + " ঘ.", Modifier.weight(1f))
+                    }
                 }
-                Divider(color = Border)
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Text("🔒 সব তথ্য এই ফোনেই সংরক্ষিত থাকে।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp))
+        item(key = "home_quick_title") {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("দ্রুত কাজ", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Ink)
+                Text("যেখানে কাজ থেমেছিল, সেখান থেকেই শুরু করুন", fontSize = 12.sp, color = Muted)
+            }
+        }
+        item(key = "home_quick_row") {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                QuickCard("দৈনিক হিসাব", "আজ বা আগের দিনের কাজ", Icons.Default.EditNote, onDaily, Modifier.weight(1f))
+                QuickCard("মাসিক পরিকল্পনা", "লক্ষ্য নির্ধারণ", Icons.Default.CalendarMonth, onPlan, Modifier.weight(1f))
+            }
+        }
+        item(key = "home_report_quick") { QuickCard("মাসিক রিপোর্ট", "একনজরে হিসাব, PDF ও প্রিন্ট", Icons.Default.Assessment, onReport, Modifier.fillMaxWidth()) }
+        item(key = "home_recent") {
+            SectionCard("সাম্প্রতিক হিসাব", "এই মাসের সর্বশেষ ৫টি রেকর্ড") {
+                if (days.isEmpty()) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(CanvasBg).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Icon(Icons.Default.EditNote, contentDescription = null, tint = Green, modifier = Modifier.size(30.dp))
+                        Text("এখনো কোনো দৈনিক হিসাব নেই", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("দৈনিক ট্যাব থেকে প্রথম রিপোর্টটি তৈরি করুন।", color = Muted, fontSize = 12.sp)
+                    }
+                } else {
+                    days.takeLast(5).asReversed().forEachIndexed { index, item ->
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onOpenDay(item.first) }.padding(horizontal = 8.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Mint), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Forest, modifier = Modifier.size(20.dp))
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("কুরআন ${numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0)} আয়াত · হাদিস ${numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0)} · পড়াশোনা ${numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0)} ঘণ্টা", color = Muted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.Default.EditNote, contentDescription = "রিপোর্ট খুলুন", tint = Green, modifier = Modifier.size(20.dp))
+                        }
+                        if (index < minOf(days.size, 5) - 1) Divider(color = Border.copy(alpha = .8f))
+                    }
+                }
+            }
+        }
+        item(key = "home_privacy") {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(Mint).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Green, modifier = Modifier.size(20.dp))
+                Text("আপনার সব তথ্য এই ফোনেই সংরক্ষিত থাকে।", color = Forest, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
+        }
     }
 }
-
 @Composable
 private fun SummaryMini(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = .13f)).padding(10.dp)) {
-        Text(label, color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
-        Text(value, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .13f)).padding(horizontal = 11.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, color = Color.White.copy(alpha = .78f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
-
 @Composable
 private fun QuickCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Border), shape = RoundedCornerShape(17.dp)) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Mint), contentAlignment = Alignment.Center) {
+    Card(onClick = onClick, modifier = modifier, colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 0.dp), border = BorderStroke(1.dp, Border.copy(alpha = .9f)), shape = RoundedCornerShape(19.dp)) {
+        Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Mint), contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription = null, tint = Forest, modifier = Modifier.size(23.dp))
             }
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(subtitle, color = Muted, fontSize = 11.sp)
+                Text(subtitle, color = Muted, fontSize = 11.sp, lineHeight = 15.sp)
             }
         }
     }
@@ -705,37 +764,51 @@ private fun QuickCard(title: String, subtitle: String, icon: androidx.compose.ui
 
 @Composable
 private fun SectionCard(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Border),
-        shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(15.dp)) {
-            Text(title, color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp, bottom = 10.dp))
-            else Spacer(Modifier.height(10.dp))
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Border.copy(alpha = .95f)), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Box(Modifier.width(5.dp).height(25.dp).clip(RoundedCornerShape(50.dp)).background(Green))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp, lineHeight = 15.sp)
+                }
+            }
+            Spacer(Modifier.height(if (subtitle != null) 13.dp else 11.dp))
             content()
         }
     }
 }
-
 @Composable
 private fun PageHeading(title: String, subtitle: String) {
-    Column(Modifier.padding(bottom = 14.dp)) {
-        Text(title, color = Ink, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-        Text(subtitle, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.width(5.dp).height(43.dp).clip(RoundedCornerShape(50.dp)).background(Green))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 28.sp)
+            Text(subtitle, color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        }
     }
 }
 
 @Composable
 private fun PlanScreen(month: String, values: Map<String, String>, onChange: (Map<String, String>) -> Unit, onSave: () -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
-    ) {
-        item(key = "plan_heading") { PageHeading("মাসিক পরিকল্পনা", monthLabel(month) + " মাসের লক্ষ্য লিখুন") }
-        items(planGroups, key = { it.title }) { group -> FieldGroupCard(group, values, onChange) }
-        item(key = "plan_save") {
-            PrimaryAction("পরিকল্পনা সংরক্ষণ", Icons.Default.Save, onSave)
-            Spacer(Modifier.height(10.dp))
+    val totalFields = planGroups.sumOf { it.fields.size }.coerceAtLeast(1)
+    val completedFields = planGroups.sumOf { group -> group.fields.count { field ->
+        val value = values[field.key].orEmpty()
+        if (field.type == FieldType.CHECK) value == "true" else value.isNotBlank()
+    } }
+    val progress = (completedFields.toFloat() / totalFields.toFloat()).coerceIn(0f, 1f)
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item(key = "plan_heading") { PageHeading("মাসিক পরিকল্পনা", monthLabel(month) + " মাসের লক্ষ্য নির্ধারণ করুন") }
+        item(key = "plan_progress") {
+            SectionCard("লক্ষ্য পূরণের অগ্রগতি", "${numberBn(completedFields)} / ${numberBn(totalFields)}টি ঘর পূরণ হয়েছে") {
+                Box(Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(50.dp)).background(Border)) {
+                    Box(Modifier.fillMaxWidth(fraction = progress).fillMaxHeight().background(Green))
+                }
+                Text("${(progress * 100).toInt()}% সম্পন্ন", color = Forest, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
         }
+        items(planGroups, key = { it.title }) { group -> FieldGroupCard(group, values, onChange) }
+        item(key = "plan_save") { PrimaryAction("পরিকল্পনা সংরক্ষণ", Icons.Default.Save, onSave); Spacer(Modifier.height(10.dp)) }
     }
 }
 @Composable
@@ -839,32 +912,55 @@ private fun DailyScreen(
 }
 @Composable
 private fun FieldGroupCard(group: FieldGroup, values: Map<String, String>, onChange: (Map<String, String>) -> Unit) {
-    SectionCard(group.title) {
-        group.fields.forEachIndexed { index, field ->
-            if (field.type == FieldType.CHECK) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
-                    onChange(values + (field.key to (if (values[field.key] == "true") "false" else "true")))
-                }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = values[field.key] == "true", onCheckedChange = { onChange(values + (field.key to it.toString())) })
-                    Text(field.label, color = Ink, fontSize = 13.sp)
+    var expanded by remember(group.title) { mutableStateOf(group.title == "কুরআন অধ্যয়ন") }
+    val completed = group.fields.count { field ->
+        val value = values[field.key].orEmpty()
+        if (field.type == FieldType.CHECK) value == "true" else value.isNotBlank()
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Border.copy(alpha = .95f)), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp), shape = RoundedCornerShape(19.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 15.dp, vertical = 12.dp)) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { expanded = !expanded }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Mint), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.EditNote, contentDescription = null, tint = Forest, modifier = Modifier.size(21.dp))
                 }
-            } else {
-                OutlinedTextField(
-                    value = values[field.key].orEmpty(),
-                    onValueChange = { onChange(values + (field.key to it)) },
-                    label = { Text(field.label + if (field.unit.isNotBlank()) " (" + field.unit + ")" else "") },
-                    placeholder = { Text(if (field.type == FieldType.NUMBER) "সংখ্যা লিখুন" else "এখানে লিখুন", color = Muted.copy(alpha = .7f)) },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = if (field.type == FieldType.NUMBER) KeyboardType.Decimal else KeyboardType.Text),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(group.title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("${numberBn(completed)} / ${numberBn(group.fields.size)}টি তথ্য পূরণ", color = Muted, fontSize = 10.sp)
+                }
+                Box(Modifier.clip(RoundedCornerShape(50.dp)).background(Mint).padding(horizontal = 9.dp, vertical = 5.dp)) {
+                    Text("${completed}/${group.fields.size}", color = Forest, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = if (expanded) "সংকুচিত করুন" else "বিস্তারিত খুলুন", tint = Muted, modifier = Modifier.size(22.dp))
             }
-            if (index < group.fields.lastIndex) Spacer(Modifier.height(8.dp))
+            Box(Modifier.fillMaxWidth().padding(top = 9.dp).height(3.dp).clip(RoundedCornerShape(50.dp)).background(Border)) {
+                Box(Modifier.fillMaxWidth(fraction = if (group.fields.isEmpty()) 0f else completed.toFloat() / group.fields.size).fillMaxHeight().background(Green))
+            }
+            if (expanded) {
+                Spacer(Modifier.height(12.dp)); Divider(color = Border); Spacer(Modifier.height(12.dp))
+                group.fields.forEachIndexed { index, field ->
+                    if (field.type == FieldType.CHECK) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (values[field.key] == "true") Mint else CanvasBg).clickable { onChange(values + (field.key to (if (values[field.key] == "true") "false" else "true"))) }.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = values[field.key] == "true", onCheckedChange = { onChange(values + (field.key to it.toString())) }, colors = CheckboxDefaults.colors(checkedColor = Green, uncheckedColor = Border, checkmarkColor = Color.White))
+                            Text(field.label, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = values[field.key].orEmpty(),
+                            onValueChange = { onChange(values + (field.key to it)) },
+                            label = { Text(field.label + if (field.unit.isNotBlank()) " (" + field.unit + ")" else "") },
+                            placeholder = { Text(if (field.type == FieldType.NUMBER) "সংখ্যা লিখুন" else "এখানে লিখুন", color = Muted.copy(alpha = .72f), fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = if (field.type == FieldType.NUMBER) KeyboardType.Decimal else KeyboardType.Text),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green, unfocusedBorderColor = Border, focusedLabelColor = Forest, unfocusedLabelColor = Muted, cursorColor = Green, focusedContainerColor = Color.White, unfocusedContainerColor = Color.White)
+                        )
+                    }
+                    if (index < group.fields.lastIndex) Spacer(Modifier.height(9.dp))
+                }
+            }
         }
     }
-    Spacer(Modifier.height(12.dp))
 }
-
 @Composable
 private fun ReportScreen(
     month: String,

@@ -217,7 +217,7 @@ private fun ReportBoiApp() {
         Scaffold(
             containerColor = CanvasBg,
             topBar = {
-                Column(Modifier.fillMaxWidth().background(Forest).padding(horizontal = 17.dp, vertical = 12.dp)) {
+                Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 17.dp, vertical = 12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                         Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
                             Text("📘", fontSize = 23.sp)

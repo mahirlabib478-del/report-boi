@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "রিপোর্ট বই",
+    "slug": "report-boi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.reportboi.offline",
+      "versionCode": 1,
+      "permissions": []
+    },
+    "splash": {
+      "backgroundColor": "#104B3B"
+    }
+  }
+}

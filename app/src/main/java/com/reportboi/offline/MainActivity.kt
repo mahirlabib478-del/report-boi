@@ -22,6 +22,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -408,9 +411,12 @@ private fun ReportBoiApp() {
             topBar = {
                 Column(Modifier.fillMaxWidth().background(Forest).statusBarsPadding().padding(horizontal = 16.dp, vertical = 9.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Assessment, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_report_boi_logo),
+                            contentDescription = "রিপোর্ট বই লোগো",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(14.dp))
+                        )
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text("রিপোর্ট বই", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
                             Text("ব্যক্তিগত পরিকল্পনা ও হিসাব", color = Color.White.copy(alpha = .78f), fontSize = 11.sp)

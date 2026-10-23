@@ -1,0 +1,728 @@
+package com.reportboi.offline
+
+import android.app.DatePickerDialog
+import android.content.Context
+import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.Color as AColor
+import android.graphics.pdf.PdfDocument
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Today
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import org.json.JSONObject
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+private val Forest = Color(0xFF145A43)
+private val Green = Color(0xFF1D7959)
+private val Mint = Color(0xFFE8F5ED)
+private val CanvasBg = Color(0xFFF4F7F4)
+private val Ink = Color(0xFF20382D)
+private val Muted = Color(0xFF6C7D73)
+private val Border = Color(0xFFDCE7DF)
+private const val PREFS = "report_boi_local"
+private const val DATA_KEY = "report_data"
+
+private enum class FieldType { NUMBER, TEXT, CHECK }
+private data class FieldSpec(val key: String, val label: String, val unit: String = "", val type: FieldType = FieldType.NUMBER)
+private data class FieldGroup(val title: String, val fields: List<FieldSpec>)
+private data class NavItem(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+private fun field(key: String, label: String, unit: String = "", type: FieldType = FieldType.NUMBER) = FieldSpec(key, label, unit, type)
+
+private val planGroups = listOf(
+    FieldGroup("কুরআন অধ্যয়ন", listOf(field("quranDays","মোট দিন","দিন"), field("quranAvgAyat","গড় আয়াত","আয়াত/দিন"), field("quranSurahNames","সূরার নাম","",FieldType.TEXT), field("quranDars","দারস প্রস্তুত","টি"), field("quranMemorizedAyat","মুখস্থ আয়াত","টি"), field("quranMeaningSurah","অর্থসহ সূরা","",FieldType.TEXT))),
+    FieldGroup("হাদিস অধ্যয়ন", listOf(field("hadithDays","মোট দিন","দিন"), field("hadithAvg","গড় হাদিস","টি/দিন"), field("hadithBooks","গ্রন্থ / বিষয়","",FieldType.TEXT), field("hadithDars","দারস প্রস্তুত","টি"), field("hadithMemorized","মুখস্থ হাদিস","টি"), field("hadithSubject","বিষয়","",FieldType.TEXT))),
+    FieldGroup("সাহিত্য অধ্যয়ন", listOf(field("literatureTotalPages","মোট পৃষ্ঠা","পৃষ্ঠা"), field("literatureIslamicPages","ইসলামী সাহিত্য","পৃষ্ঠা"), field("literatureOtherPages","অন্যান্য সাহিত্য","পৃষ্ঠা"), field("literatureBooks","বইয়ের নাম","",FieldType.TEXT), field("bookNotes","বই নোট","টি"), field("discussionNotes","আলোচনা নোট","টি"))),
+    FieldGroup("পাঠ্যপুস্তক ও নামাজ", listOf(field("studyDays","পড়াশোনার মোট দিন","দিন"), field("studyAvgHours","গড় পড়াশোনা","ঘণ্টা/দিন"), field("classesTotal","মোট ক্লাস","টি"), field("classesTargetAttendance","লক্ষ্য উপস্থিতি","টি"), field("jamaatTarget","জামাতে নামাজের লক্ষ্য","ওয়াক্ত"), field("qazaTarget","কাজা নামাজের লক্ষ্য","ওয়াক্ত"))),
+    FieldGroup("যোগাযোগের লক্ষ্য", listOf(field("contactMember","সদস্য","জন"), field("contactSathi","সাথী","জন"), field("contactWorker","কর্মী","জন"), field("contactSupporter","সমর্থক","জন"), field("contactFriend","বন্ধু","জন"), field("contactWellWisher","শুভাকাঙ্ক্ষী","জন"), field("contactSchoolStudent","স্কুলছাত্র","জন"), field("contactTalentedStudent","মেধাবী ছাত্র","জন"), field("contactTeacher","শিক্ষক","জন"), field("contactMuharrama","মুহাররমা","জন"), field("contactVIP","ভিআইপি","জন"))),
+    FieldGroup("সাংগঠনিক দায়িত্ব পালন", listOf(field("orgDays","মোট দিন","দিন"), field("orgAvgHours","গড় সময়","ঘণ্টা/দিন"), field("dawahDays","দাওয়াতি কাজ","দিন"), field("otherOrgDays","অন্যান্য সাংগঠনিক কাজ","দিন"), field("dawahHours","দাওয়াতি কাজের সময়","ঘণ্টা"), field("otherOrgHours","অন্যান্য কাজের সময়","ঘণ্টা"))),
+    FieldGroup("বিতরণের লক্ষ্য", listOf(field("distIslamicLiterature","ইসলামী সাহিত্য","টি"), field("distKishoreMagazine","কিশোর পত্রিকা","টি"), field("distYW","Y.W.","টি"), field("distStudentNews","ছাত্রসংবাদ","টি"), field("distEnglishMagazine","ইংরেজি পত্রিকা","টি"), field("distIntro","পরিচিতি","টি"), field("distClassRoutine","ক্লাস রুটিন","টি"), field("distStickerCard","স্টিকার/কার্ড","টি"), field("distGiftMessageEmail","উপহার/মেসেজ/ই-মেইল","টি"))),
+    FieldGroup("বৃদ্ধির লক্ষ্য", listOf(field("growthMember","সদস্য","জন"), field("growthCandidate","সদস্যপ্রার্থী","জন"), field("growthSathi","সাথী","জন"), field("growthSathiCandidate","সাথীপ্রার্থী","জন"), field("growthWorker","কর্মী","জন"), field("growthSupporter","সমর্থক","জন"), field("growthFriend","বন্ধু","জন"), field("growthWellWisher","শুভাকাঙ্ক্ষী","জন"))),
+    FieldGroup("বায়তুলমাল / আর্থিক হিসাব", listOf(field("financePaymentDate","পরিশোধের তারিখ","",FieldType.TEXT), field("financePersonalGrowth","ব্যক্তিগত বৃদ্ধি","টাকা"), field("financeTotalGrowth","মোট বৃদ্ধি","টাকা"), field("financeStudentWelfare","ছাত্রকল্যাণ","টাকা"), field("financeTableBank","টেবিল ব্যাংক","টাকা"), field("financePotCount","কলসি/হাঁড়ি","টি"))),
+    FieldGroup("বিবিধ পরিকল্পনা", listOf(field("selfReviewDays","আত্মসমালোচনা","দিন"), field("exerciseDays","শরীরচর্চা","দিন"), field("magazineReadDays","পত্রিকা পাঠ","দিন"), field("relativesContacts","আত্মীয়স্বজনের সঙ্গে যোগাযোগ","জন"), field("groupDawahCount","গ্রুপ দাওয়াতি কাজ","বার"), field("dawahMessageCount","দাওয়াতি মেসেজ","টি"), field("dawahEmailCount","দাওয়াতি ই-মেইল","টি"), field("nonMuslimContacts","অমুসলিম বন্ধু যোগাযোগ","জন"), field("orgContacts","বন্ধু সংগঠনের সঙ্গে যোগাযোগ","জন/সংগঠন"), field("computerStudyDays","কম্পিউটার শিক্ষা","দিন"), field("languageStudyDays","ভাষা শিক্ষা","দিন"), field("otherActivities","অন্যান্য","",FieldType.TEXT), field("reportCount","দায়িত্বশীলকে রিপোর্ট","বার"), field("reportDate","রিপোর্টের তারিখ","",FieldType.TEXT)))
+)
+
+private val dailyGroups = listOf(
+    FieldGroup("কুরআন অধ্যয়ন", listOf(field("quranAyat","পড়া আয়াত","আয়াত"), field("quranSurah","সূরার নাম","",FieldType.TEXT), field("quranMemorized","মুখস্থ আয়াত","আয়াত"), field("quranDarsDone","দারস প্রস্তুত","টি"))),
+    FieldGroup("হাদিস অধ্যয়ন", listOf(field("hadithCount","পড়া হাদিস","টি"), field("hadithMemorized","মুখস্থ হাদিস","টি"), field("hadithTopic","গ্রন্থ / বিষয়","",FieldType.TEXT), field("hadithDarsDone","দারস প্রস্তুত","টি"))),
+    FieldGroup("সাহিত্য ও পাঠ্যপুস্তক", listOf(field("literatureIslamic","ইসলামী সাহিত্য","পৃষ্ঠা"), field("literatureOther","অন্যান্য সাহিত্য","পৃষ্ঠা"), field("textbookHours","পড়াশোনার সময়","ঘণ্টা"), field("classesTotal","মোট ক্লাস","টি"), field("classesAttended","উপস্থিত ক্লাস","টি"))),
+    FieldGroup("নামাজ", listOf(field("jamaat","জামাতে নামাজ","ওয়াক্ত"), field("qaza","কাজা নামাজ","ওয়াক্ত"))),
+    FieldGroup("যোগাযোগ", listOf(field("contactMember","সদস্য","জন"), field("contactSathi","সাথী","জন"), field("contactWorker","কর্মী","জন"), field("contactSupporter","সমর্থক","জন"), field("contactFriend","বন্ধু","জন"), field("contactWellWisher","শুভাকাঙ্ক্ষী","জন"), field("contactSchoolStudent","স্কুলছাত্র","জন"), field("contactTalentedStudent","মেধাবী ছাত্র","জন"), field("contactTeacher","শিক্ষক","জন"), field("contactMuharrama","মুহাররমা","জন"), field("contactVIP","ভিআইপি","জন"))),
+    FieldGroup("বিতরণ", listOf(field("distIslamicLiterature","ইসলামী সাহিত্য","টি"), field("distKishoreMagazine","কিশোর পত্রিকা","টি"), field("distYW","Y.W.","টি"), field("distStudentNews","ছাত্রসংবাদ","টি"), field("distEnglishMagazine","ইংরেজি পত্রিকা","টি"), field("distIntro","পরিচিতি","টি"), field("distClassRoutine","ক্লাস রুটিন","টি"), field("distStickerCard","স্টিকার/কার্ড","টি"), field("distGiftMessageEmail","উপহার/মেসেজ/ই-মেইল","টি"))),
+    FieldGroup("সাংগঠনিক দায়িত্ব ও দাওয়াত", listOf(field("dawahHours","দাওয়াতি কাজ","ঘণ্টা"), field("otherOrgHours","অন্যান্য সাংগঠনিক কাজ","ঘণ্টা"), field("groupDawahCount","গ্রুপ দাওয়াতি কাজ","বার"), field("dawahMessageCount","দাওয়াতি মেসেজ","টি"), field("dawahEmailCount","দাওয়াতি ই-মেইল","টি"))),
+    FieldGroup("বিবিধ ও অভ্যাস", listOf(field("relativesContacts","আত্মীয়স্বজনের সঙ্গে যোগাযোগ","জন"), field("nonMuslimContacts","অমুসলিম বন্ধু যোগাযোগ","জন"), field("orgContacts","বন্ধু সংগঠনের সঙ্গে যোগাযোগ","জন/সংগঠন"), field("computerStudyHours","কম্পিউটার শিক্ষা","ঘণ্টা"), field("languageStudyHours","ভাষা শিক্ষা","ঘণ্টা"), field("otherActivities","অন্যান্য কাজ","",FieldType.TEXT), field("magazineRead","পত্রিকা পাঠ করেছি","",FieldType.CHECK), field("exerciseDone","শরীরচর্চা করেছি","",FieldType.CHECK), field("selfReviewDone","আত্মসমালোচনা করেছি","",FieldType.CHECK), field("reportGiven","দায়িত্বশীলকে রিপোর্ট দিয়েছি","",FieldType.CHECK)))
+)
+
+private val totalFields = listOf(
+    field("quranAyat","কুরআনের আয়াত","আয়াত"), field("quranMemorized","মুখস্থ আয়াত","আয়াত"), field("quranDarsDone","কুরআন দারস প্রস্তুত","টি"),
+    field("hadithCount","পড়া হাদিস","টি"), field("hadithMemorized","মুখস্থ হাদিস","টি"), field("hadithDarsDone","হাদিস দারস প্রস্তুত","টি"),
+    field("literatureIslamic","ইসলামী সাহিত্য","পৃষ্ঠা"), field("literatureOther","অন্যান্য সাহিত্য","পৃষ্ঠা"), field("textbookHours","পড়াশোনা","ঘণ্টা"),
+    field("classesTotal","মোট ক্লাস","টি"), field("classesAttended","উপস্থিত ক্লাস","টি"), field("jamaat","জামাতে নামাজ","ওয়াক্ত"), field("qaza","কাজা নামাজ","ওয়াক্ত"),
+    field("contactMember","সদস্য যোগাযোগ","জন"), field("contactSathi","সাথী যোগাযোগ","জন"), field("contactWorker","কর্মী যোগাযোগ","জন"),
+    field("contactSupporter","সমর্থক যোগাযোগ","জন"), field("contactFriend","বন্ধু যোগাযোগ","জন"), field("contactWellWisher","শুভাকাঙ্ক্ষী যোগাযোগ","জন"),
+    field("contactSchoolStudent","স্কুলছাত্র যোগাযোগ","জন"), field("contactTalentedStudent","মেধাবী ছাত্র যোগাযোগ","জন"), field("contactTeacher","শিক্ষক যোগাযোগ","জন"),
+    field("contactMuharrama","মুহাররমা যোগাযোগ","জন"), field("contactVIP","ভিআইপি যোগাযোগ","জন"),
+    field("distIslamicLiterature","ইসলামী সাহিত্য বিতরণ","টি"), field("distKishoreMagazine","কিশোর পত্রিকা বিতরণ","টি"), field("distYW","Y.W. বিতরণ","টি"),
+    field("distStudentNews","ছাত্রসংবাদ বিতরণ","টি"), field("distEnglishMagazine","ইংরেজি পত্রিকা বিতরণ","টি"), field("distIntro","পরিচিতি বিতরণ","টি"),
+    field("distClassRoutine","ক্লাস রুটিন বিতরণ","টি"), field("distStickerCard","স্টিকার/কার্ড বিতরণ","টি"), field("distGiftMessageEmail","উপহার/মেসেজ/ই-মেইল","টি"),
+    field("dawahHours","দাওয়াতি কাজ","ঘণ্টা"), field("otherOrgHours","অন্যান্য সাংগঠনিক কাজ","ঘণ্টা"), field("groupDawahCount","গ্রুপ দাওয়াতি কাজ","বার"),
+    field("dawahMessageCount","দাওয়াতি মেসেজ","টি"), field("dawahEmailCount","দাওয়াতি ই-মেইল","টি"), field("relativesContacts","আত্মীয়স্বজন যোগাযোগ","জন"),
+    field("nonMuslimContacts","অমুসলিম বন্ধু যোগাযোগ","জন"), field("orgContacts","বন্ধু সংগঠনের সঙ্গে যোগাযোগ","জন/সংগঠন"),
+    field("computerStudyHours","কম্পিউটার শিক্ষা","ঘণ্টা"), field("languageStudyHours","ভাষা শিক্ষা","ঘণ্টা")
+)
+
+private fun todayIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+private fun currentMonth(): String = todayIso().take(7)
+private fun monthLabel(month: String): String = try {
+    val date = SimpleDateFormat("yyyy-MM", Locale.US).parse(month) ?: Date()
+    SimpleDateFormat("MMMM yyyy", Locale("bn", "BD")).format(date)
+} catch (_: Exception) { month }
+private fun numberBn(value: Number): String = NumberFormat.getInstance(Locale("bn", "BD")).format(value)
+private fun newRoot() = JSONObject().put("plans", JSONObject()).put("days", JSONObject())
+private fun loadRoot(context: Context): JSONObject = try {
+    val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(DATA_KEY, null)
+    if (raw.isNullOrBlank()) newRoot() else JSONObject(raw).also {
+        if (!it.has("plans")) it.put("plans", JSONObject())
+        if (!it.has("days")) it.put("days", JSONObject())
+    }
+} catch (_: Exception) { newRoot() }
+private fun cloneJson(value: JSONObject) = JSONObject(value.toString())
+private fun jsonToMap(json: JSONObject?): Map<String, String> {
+    if (json == null) return emptyMap()
+    val out = linkedMapOf<String, String>()
+    val keys = json.keys()
+    while (keys.hasNext()) {
+        val key = keys.next()
+        val value = json.opt(key)
+        out[key] = if (value == null || value == JSONObject.NULL) "" else value.toString()
+    }
+    return out
+}
+private fun mapToJson(values: Map<String, String>) = JSONObject().apply { values.forEach { (key, value) -> put(key, value) } }
+private fun saveRoot(context: Context, value: JSONObject) {
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(DATA_KEY, value.toString()).apply()
+}
+private fun monthDays(root: JSONObject, month: String): List<Pair<String, Map<String, String>>> {
+    val days = root.optJSONObject("days") ?: JSONObject()
+    val keys = days.keys().asSequence().filter { it.startsWith(month) }.sorted().toList()
+    return keys.map { it to jsonToMap(days.optJSONObject(it)) }
+}
+private fun totalFor(root: JSONObject, month: String, key: String): Double =
+    monthDays(root, month).sumOf { it.second[key]?.toDoubleOrNull() ?: 0.0 }
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { ReportBoiApp() }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReportBoiApp() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var root by remember { mutableStateOf(loadRoot(context)) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var monthInput by remember { mutableStateOf(currentMonth()) }
+    var selectedMonth by remember { mutableStateOf(currentMonth()) }
+    var selectedDay by remember { mutableStateOf(todayIso()) }
+    var planValues by remember { mutableStateOf(jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth))) }
+    var dayValues by remember { mutableStateOf(jsonToMap(root.optJSONObject("days")?.optJSONObject(selectedDay))) }
+    var pendingPdf by remember { mutableStateOf<File?>(null) }
+
+    val savePdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
+        val file = pendingPdf
+        if (uri != null && file != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    FileInputStream(file).use { input -> input.copyTo(output) }
+                }
+                Toast.makeText(context, "PDF সংরক্ষণ হয়েছে", Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "PDF সংরক্ষণ করা যায়নি", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    LaunchedEffect(selectedMonth) {
+        planValues = jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth))
+        monthInput = selectedMonth
+    }
+    LaunchedEffect(selectedDay) {
+        dayValues = jsonToMap(root.optJSONObject("days")?.optJSONObject(selectedDay))
+    }
+
+    val navItems = listOf(
+        NavItem("হোম", Icons.Default.Home),
+        NavItem("পরিকল্পনা", Icons.Default.CalendarMonth),
+        NavItem("দৈনিক", Icons.Default.EditNote),
+        NavItem("রিপোর্ট", Icons.Default.Assessment)
+    )
+
+    MaterialTheme(colorScheme = lightColorScheme(
+        primary = Forest, onPrimary = Color.White, secondary = Green, onSecondary = Color.White,
+        background = CanvasBg, surface = Color.White, onSurface = Ink, onBackground = Ink,
+        primaryContainer = Mint, onPrimaryContainer = Forest, outline = Border
+    )) {
+        Scaffold(
+            containerColor = CanvasBg,
+            topBar = {
+                Column(Modifier.fillMaxWidth().background(Forest).padding(horizontal = 17.dp, vertical = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                            Text("📘", fontSize = 23.sp)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("রিপোর্ট বই", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("ব্যক্তিগত পরিকল্পনা ও হিসাব", color = Color.White.copy(alpha = .78f), fontSize = 11.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFFBFE9D0), modifier = Modifier.size(21.dp))
+                            Text("অফলাইন", color = Color.White.copy(alpha = .86f), fontSize = 10.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
+                        OutlinedTextField(
+                            value = monthInput,
+                            onValueChange = { monthInput = it },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            label = { Text("রিপোর্টের মাস", color = Color.White.copy(alpha = .8f)) },
+                            placeholder = { Text("YYYY-MM") },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = Color.White),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.White, unfocusedBorderColor = Color.White.copy(alpha = .45f),
+                                cursorColor = Color.White, focusedTextColor = Color.White, unfocusedTextColor = Color.White
+                            )
+                        )
+                        Button(
+                            onClick = {
+                                if (Regex("\\d{4}-\\d{2}").matches(monthInput)) selectedMonth = monthInput
+                                else Toast.makeText(context, "মাস YYYY-MM ফরম্যাটে লিখুন", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Forest),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("সেট", fontWeight = FontWeight.Bold) }
+                    }
+                }
+            },
+            bottomBar = {
+                NavigationBar(containerColor = Color.White) {
+                    navItems.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            icon = { Icon(item.icon, contentDescription = item.title) },
+                            label = { Text(item.title, fontSize = 11.sp) },
+                            alwaysShowLabel = true
+                        )
+                    }
+                }
+            }
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                when (selectedTab) {
+                    0 -> HomeScreen(selectedMonth, root,
+                        onDaily = { selectedDay = todayIso(); selectedMonth = todayIso().take(7); monthInput = todayIso().take(7); selectedTab = 2 },
+                        onPlan = { selectedTab = 1 }, onReport = { selectedTab = 3 })
+                    1 -> PlanScreen(selectedMonth, planValues, { planValues = it }) {
+                        val next = cloneJson(root)
+                        val plans = next.optJSONObject("plans") ?: JSONObject()
+                        plans.put(selectedMonth, mapToJson(planValues)); next.put("plans", plans)
+                        saveRoot(context, next); root = next
+                        Toast.makeText(context, "মাসিক পরিকল্পনা সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
+                    }
+                    2 -> DailyScreen(selectedDay, dayValues, {
+                        val calendar = Calendar.getInstance()
+                        try { calendar.time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedDay) ?: Date() } catch (_: Exception) {}
+                        DatePickerDialog(context, { _, year, month, day ->
+                            val date = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                            selectedDay = date; selectedMonth = date.take(7); monthInput = date.take(7)
+                        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+                    }, { dayValues = it }, {
+                        val next = cloneJson(root)
+                        val days = next.optJSONObject("days") ?: JSONObject()
+                        days.put(selectedDay, mapToJson(dayValues)); next.put("days", days)
+                        saveRoot(context, next); root = next
+                        Toast.makeText(context, "দৈনিক হিসাব সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
+                    }, {
+                        val next = cloneJson(root)
+                        val days = next.optJSONObject("days") ?: JSONObject()
+                        days.remove(selectedDay); next.put("days", days)
+                        saveRoot(context, next); root = next; dayValues = emptyMap()
+                        Toast.makeText(context, "এই দিনের হিসাব মুছে দেওয়া হয়েছে", Toast.LENGTH_SHORT).show()
+                    })
+                    3 -> ReportScreen(selectedMonth, root, {
+                        try {
+                            val file = PdfReport.create(context, selectedMonth, jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth)), monthDays(root, selectedMonth))
+                            pendingPdf = file
+                            savePdfLauncher.launch("Report-Boi-" + selectedMonth + ".pdf")
+                        } catch (_: Exception) { Toast.makeText(context, "PDF তৈরি করা যায়নি", Toast.LENGTH_LONG).show() }
+                    }, {
+                        try {
+                            val file = PdfReport.create(context, selectedMonth, jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth)), monthDays(root, selectedMonth))
+                            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/pdf"; putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "মাসিক PDF শেয়ার করুন"))
+                        } catch (_: Exception) { Toast.makeText(context, "PDF শেয়ার করা যায়নি", Toast.LENGTH_LONG).show() }
+                    }, {
+                        try {
+                            val file = PdfReport.create(context, selectedMonth, jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth)), monthDays(root, selectedMonth))
+                            val manager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                            manager.print("Report-Boi-" + selectedMonth, LocalPdfPrintAdapter(file),
+                                PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                    .setResolution(PrintAttributes.Resolution("report_boi", "Report Boi", 300, 300))
+                                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS).build())
+                        } catch (_: Exception) { Toast.makeText(context, "প্রিন্ট শুরু করা যায়নি", Toast.LENGTH_LONG).show() }
+                    })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeScreen(month: String, root: JSONObject, onDaily: () -> Unit, onPlan: () -> Unit, onReport: () -> Unit) {
+    val days = monthDays(root, month)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = Green), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                Text("স্বাগতম 👋", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
+                Text("আপনার মাস, আপনার অগ্রগতি", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                Text(monthLabel(month), color = Color.White.copy(alpha = .86f), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                Spacer(Modifier.height(17.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryMini("রেকর্ড", numberBn(days.size), Modifier.weight(1f))
+                    SummaryMini("কুরআন", numberBn(totalFor(root, month, "quranAyat")), Modifier.weight(1f))
+                    SummaryMini("হাদিস", numberBn(totalFor(root, month, "hadithCount")), Modifier.weight(1f))
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("দ্রুত কাজ", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Spacer(Modifier.height(9.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuickCard("দৈনিক হিসাব", "আজকের কাজ লিখুন", Icons.Default.EditNote, onDaily, Modifier.weight(1f))
+            QuickCard("মাসিক পরিকল্পনা", "লক্ষ্য নির্ধারণ", Icons.Default.CalendarMonth, onPlan, Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(10.dp))
+        QuickCard("মাসিক রিপোর্ট", "মোট হিসাব, PDF ও প্রিন্ট", Icons.Default.Assessment, onReport, Modifier.fillMaxWidth())
+        Spacer(Modifier.height(17.dp))
+        SectionCard("সাম্প্রতিক হিসাব", "এই মাসের সর্বশেষ ৫টি রেকর্ড") {
+            if (days.isEmpty()) Text("এখনো কোনো দৈনিক হিসাব নেই। “দৈনিক” ট্যাব থেকে শুরু করুন।", color = Muted, fontSize = 13.sp)
+            else days.takeLast(5).asReversed().forEach { item ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+                    Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · পড়াশোনা " + numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
+                }
+                Divider(color = Border)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("🔒 সব তথ্য এই ফোনেই সংরক্ষিত থাকে।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp))
+    }
+}
+
+@Composable
+private fun SummaryMini(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = .13f)).padding(10.dp)) {
+        Text(label, color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
+        Text(value, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun QuickCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Border), shape = RoundedCornerShape(17.dp)) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Mint), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = Forest, modifier = Modifier.size(23.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(subtitle, color = Muted, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionCard(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Border),
+        shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(15.dp)) {
+            Text(title, color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (subtitle != null) Text(subtitle, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp, bottom = 10.dp))
+            else Spacer(Modifier.height(10.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun PageHeading(title: String, subtitle: String) {
+    Column(Modifier.padding(bottom = 14.dp)) {
+        Text(title, color = Ink, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+        Text(subtitle, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun PlanScreen(month: String, values: Map<String, String>, onChange: (Map<String, String>) -> Unit, onSave: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        PageHeading("মাসিক পরিকল্পনা", monthLabel(month) + " মাসের লক্ষ্য লিখুন")
+        planGroups.forEach { FieldGroupCard(it, values, onChange) }
+        PrimaryAction("পরিকল্পনা সংরক্ষণ", Icons.Default.Save, onSave)
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun DailyScreen(date: String, values: Map<String, String>, onPickDate: () -> Unit, valuesChange: (Map<String, String>) -> Unit, onSave: () -> Unit, onClear: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        PageHeading("দৈনিক হিসাব", "প্রতিদিনের কাজ ও অভ্যাস লিখুন")
+        SectionCard("হিসাবের তারিখ", "যে দিনের তথ্য লিখবেন, তারিখ নির্বাচন করুন") {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
+                Text(date, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = onPickDate) { Text("তারিখ বদলান") }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        dailyGroups.forEach { FieldGroupCard(it, values, valuesChange) }
+        PrimaryAction("দৈনিক হিসাব সংরক্ষণ", Icons.Default.Save, onSave)
+        TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) { Text("এই দিনের হিসাব মুছুন", color = Color(0xFFB0443E)) }
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun FieldGroupCard(group: FieldGroup, values: Map<String, String>, onChange: (Map<String, String>) -> Unit) {
+    SectionCard(group.title) {
+        group.fields.forEachIndexed { index, field ->
+            if (field.type == FieldType.CHECK) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
+                    onChange(values + (field.key to if (values[field.key] == "true") "false" else "true"))
+                }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = values[field.key] == "true", onCheckedChange = { onChange(values + (field.key to it.toString())) })
+                    Text(field.label, color = Ink, fontSize = 13.sp)
+                }
+            } else {
+                OutlinedTextField(
+                    value = values[field.key].orEmpty(),
+                    onValueChange = { onChange(values + (field.key to it)) },
+                    label = { Text(field.label + if (field.unit.isNotBlank()) " (" + field.unit + ")" else "") },
+                    placeholder = { Text(if (field.type == FieldType.NUMBER) "সংখ্যা লিখুন" else "এখানে লিখুন", color = Muted.copy(alpha = .7f)) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = if (field.type == FieldType.NUMBER) KeyboardType.Decimal else KeyboardType.Text),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+            if (index < group.fields.lastIndex) Spacer(Modifier.height(8.dp))
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun ReportScreen(month: String, root: JSONObject, onSavePdf: () -> Unit, onSharePdf: () -> Unit, onPrint: () -> Unit) {
+    val days = monthDays(root, month)
+    val plan = jsonToMap(root.optJSONObject("plans")?.optJSONObject(month))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        PageHeading("মাসিক রিপোর্ট", monthLabel(month) + " · " + numberBn(days.size) + " দিনের রেকর্ড")
+        Card(colors = CardDefaults.cardColors(containerColor = Forest), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp)) {
+                Text("মাসের সারাংশ", color = Color.White.copy(alpha = .78f), fontSize = 12.sp)
+                Text(monthLabel(month), color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryMini("রেকর্ডের দিন", numberBn(days.size), Modifier.weight(1f))
+                    SummaryMini("কুরআন", numberBn(totalFor(root, month, "quranAyat")), Modifier.weight(1f))
+                    SummaryMini("পড়াশোনা", numberBn(totalFor(root, month, "textbookHours")) + " ঘ.", Modifier.weight(1f))
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        SectionCard("মাসিক পরিকল্পনা", "এই মাসে নির্ধারিত লক্ষ্য") {
+            var count = 0
+            planGroups.forEach { group ->
+                val entries = group.fields.filter { !plan[it.key].isNullOrBlank() }
+                if (entries.isNotEmpty()) {
+                    count += entries.size
+                    Text(group.title, color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                    entries.forEach { field ->
+                        ReportRow(field.label, plan[field.key].orEmpty() + if (field.unit.isNotBlank()) " " + field.unit else "")
+                    }
+                }
+            }
+            if (count == 0) Text("এই মাসে এখনো পরিকল্পনা সংরক্ষণ করা হয়নি।", color = Muted, fontSize = 13.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        SectionCard("মাসের মোট কাজ", "দৈনিক রেকর্ড থেকে হিসাব করা হয়েছে") {
+            totalFields.forEach { field ->
+                ReportRow(field.label, numberBn(totalFor(root, month, field.key)) + if (field.unit.isNotBlank()) " " + field.unit else "")
+            }
+            ReportRow("পত্রিকা পাঠ", numberBn(days.count { it.second["magazineRead"] == "true" }) + " দিন")
+            ReportRow("শরীরচর্চা", numberBn(days.count { it.second["exerciseDone"] == "true" }) + " দিন")
+            ReportRow("আত্মসমালোচনা", numberBn(days.count { it.second["selfReviewDone"] == "true" }) + " দিন")
+        }
+        Spacer(Modifier.height(12.dp))
+        SectionCard("দৈনিক রেকর্ড", "প্রতিদিনের সংক্ষিপ্ত সারাংশ") {
+            if (days.isEmpty()) Text("এই মাসে কোনো দৈনিক হিসাব নেই।", color = Muted, fontSize = 13.sp)
+            days.forEach { item ->
+                val date = item.first
+                val values = item.second
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(date, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("কুরআন " + numberBn(values["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(values["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · সাহিত্য " + numberBn((values["literatureIslamic"]?.toDoubleOrNull() ?: 0.0) + (values["literatureOther"]?.toDoubleOrNull() ?: 0.0)) + " পৃষ্ঠা · পড়াশোনা " + numberBn(values["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
+                }
+                Divider(color = Border)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        PrimaryAction("PDF ডাউনলোড / সংরক্ষণ", Icons.Default.PictureAsPdf, onSavePdf)
+        SecondaryAction("PDF শেয়ার করুন", onSharePdf)
+        SecondaryAction("প্রিন্ট করুন", onPrint, Icons.Default.Print)
+        Spacer(Modifier.height(18.dp))
+    }
+}
+
+@Composable
+private fun ReportRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text(value.ifBlank { "—" }, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+    }
+    Divider(color = Border.copy(alpha = .75f))
+}
+
+@Composable
+private fun PrimaryAction(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(19.dp))
+        Spacer(Modifier.width(9.dp))
+        Text(title, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun SecondaryAction(title: String, onClick: () -> Unit, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(49.dp), shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Forest)) {
+        if (icon != null) { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
+        Text(title, fontWeight = FontWeight.Bold)
+    }
+}
+
+private class LocalPdfPrintAdapter(private val file: File) : PrintDocumentAdapter() {
+    override fun onLayout(oldAttributes: PrintAttributes?, newAttributes: PrintAttributes?, cancellationSignal: CancellationSignal?, callback: LayoutResultCallback, extras: Bundle?) {
+        if (cancellationSignal?.isCanceled == true) { callback.onLayoutCancelled(); return }
+        val info = PrintDocumentInfo.Builder(file.name).setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+            .setPageCount(PrintDocumentInfo.PAGE_COUNT_UNKNOWN).build()
+        callback.onLayoutFinished(info, true)
+    }
+    override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor?, cancellationSignal: CancellationSignal?, callback: WriteResultCallback) {
+        if (destination == null) { callback.onWriteFailed("PDF destination unavailable"); return }
+        try {
+            FileInputStream(file).use { input ->
+                FileOutputStream(destination.fileDescriptor).use { output ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        if (cancellationSignal?.isCanceled == true) { callback.onWriteCancelled(); return }
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                    }
+                    output.flush()
+                }
+            }
+            callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        } catch (e: Exception) { callback.onWriteFailed(e.message) }
+    }
+}
+
+private object PdfReport {
+    fun create(context: Context, month: String, plan: Map<String, String>, days: List<Pair<String, Map<String, String>>>): File {
+        val document = PdfDocument()
+        val writer = Writer(document, month)
+        writer.title("রিপোর্ট বই — মাসিক রিপোর্ট")
+        writer.text("মাস: " + monthLabel(month), 12f, true, Forest.toArgb())
+        writer.text("ব্যবহারকারী: ব্যক্তিগত হিসাব", 10f, false, Muted.toArgb())
+        writer.text("রেকর্ড: " + numberBn(days.size) + " দিন  |  কুরআন: " + numberBn(days.sumOf { it.second["quranAyat"]?.toDoubleOrNull() ?: 0.0 }) + " আয়াত  |  হাদিস: " + numberBn(days.sumOf { it.second["hadithCount"]?.toDoubleOrNull() ?: 0.0 }) + " টি", 10f)
+        writer.space(8f)
+        writer.section("মাসিক পরিকল্পনা")
+        var anyPlan = false
+        planGroups.forEach { group ->
+            val filled = group.fields.filter { !plan[it.key].isNullOrBlank() }
+            if (filled.isNotEmpty()) {
+                anyPlan = true
+                writer.subheading(group.title)
+                filled.forEach { field ->
+                    writer.row(field.label, plan[field.key].orEmpty() + if (field.unit.isNotBlank()) " " + field.unit else "")
+                }
+            }
+        }
+        if (!anyPlan) writer.text("এই মাসে কোনো পরিকল্পনা সংরক্ষণ করা হয়নি।")
+        writer.space(8f)
+        writer.section("মাসের মোট কাজ")
+        totalFields.forEach { field ->
+            val total = days.sumOf { it.second[field.key]?.toDoubleOrNull() ?: 0.0 }
+            writer.row(field.label, numberBn(total) + if (field.unit.isNotBlank()) " " + field.unit else "")
+        }
+        writer.row("পত্রিকা পাঠ", numberBn(days.count { it.second["magazineRead"] == "true" }) + " দিন")
+        writer.row("শরীরচর্চা", numberBn(days.count { it.second["exerciseDone"] == "true" }) + " দিন")
+        writer.row("আত্মসমালোচনা", numberBn(days.count { it.second["selfReviewDone"] == "true" }) + " দিন")
+        writer.space(8f)
+        writer.section("দৈনিক হিসাব")
+        if (days.isEmpty()) writer.text("এই মাসে কোনো দৈনিক হিসাব নেই।")
+        days.forEach { item ->
+            writer.subheading(item.first)
+            dailyGroups.forEach { group ->
+                group.fields.forEach { field ->
+                    val value = item.second[field.key].orEmpty()
+                    if (value.isNotBlank() && value != "false") {
+                        writer.row(field.label, if (field.type == FieldType.CHECK) "হ্যাঁ" else value + if (field.unit.isNotBlank()) " " + field.unit else "")
+                    }
+                }
+            }
+        }
+        writer.space(18f)
+        writer.text("দায়িত্বশীলের মন্তব্য: __________________________________________")
+        writer.text("স্বাক্ষর: __________________________    তারিখ: __________________")
+        writer.finish()
+        val file = File(context.cacheDir, "report-boi-" + month + ".pdf")
+        FileOutputStream(file).use { document.writeTo(it) }
+        document.close()
+        return file
+    }
+
+    private class Writer(private val document: PdfDocument, private val month: String) {
+        private var pageNumber = 0
+        private var page: PdfDocument.Page? = null
+        private var canvas: Canvas? = null
+        private var y = 48f
+        private val width = 595
+        private val height = 842
+        private val left = 38f
+        private val right = 557f
+        init { startPage() }
+
+        private fun startPage() {
+            pageNumber += 1
+            page = document.startPage(PdfDocument.PageInfo.Builder(width, height, pageNumber).create())
+            canvas = page!!.canvas
+            canvas!!.drawColor(AColor.WHITE)
+            y = 45f
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Forest.toArgb(); textSize = 10f; typeface = Typeface.create("sans-serif", Typeface.NORMAL) }
+            canvas!!.drawText("রিপোর্ট বই  •  " + monthLabel(month), left, y, paint)
+            y += 23f
+        }
+        private fun nextPageIfNeeded(lines: Int = 1) {
+            if (y + lines * 18f > height - 42f) {
+                document.finishPage(page!!)
+                startPage()
+            }
+        }
+        fun title(value: String) {
+            nextPageIfNeeded(3)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Forest.toArgb(); textSize = 21f; typeface = Typeface.create("sans-serif", Typeface.BOLD) }
+            canvas!!.drawText(value, left, y + 3f, p); y += 32f
+        }
+        fun section(value: String) {
+            nextPageIfNeeded(2)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Forest.toArgb() }
+            canvas!!.drawRoundRect(left, y, right, y + 25f, 5f, 5f, p)
+            val t = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AColor.WHITE; textSize = 12f; typeface = Typeface.create("sans-serif", Typeface.BOLD) }
+            canvas!!.drawText(value, left + 9f, y + 17f, t); y += 34f
+        }
+        fun subheading(value: String) {
+            nextPageIfNeeded(2)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Green.toArgb(); textSize = 11f; typeface = Typeface.create("sans-serif", Typeface.BOLD) }
+            canvas!!.drawText(value, left, y, p); y += 17f
+        }
+        fun row(label: String, value: String) {
+            val lines = wrap(label + ": " + value, 70)
+            nextPageIfNeeded(lines.size)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ink.toArgb(); textSize = 9.5f; typeface = Typeface.create("sans-serif", Typeface.NORMAL) }
+            lines.forEach { canvas!!.drawText(it, left + 2f, y, p); y += 15f }
+            y += 2f
+            val divider = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Border.toArgb(); strokeWidth = .5f }
+            canvas!!.drawLine(left, y, right, y, divider); y += 5f
+        }
+        fun text(value: String, size: Float = 10f, bold: Boolean = false, color: Int = Ink.toArgb()) {
+            val lines = wrap(value, 78)
+            nextPageIfNeeded(lines.size)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; textSize = size; typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL) }
+            lines.forEach { canvas!!.drawText(it, left, y, p); y += size + 7f }
+        }
+        fun space(value: Float) { y += value }
+        fun finish() { document.finishPage(page!!) }
+        private fun wrap(value: String, max: Int): List<String> {
+            val words = value.split(Regex("\\s+"))
+            val lines = mutableListOf<String>()
+            var line = ""
+            words.forEach { word ->
+                if (line.isNotEmpty() && line.length + word.length + 1 > max) { lines.add(line); line = word }
+                else line = if (line.isEmpty()) word else line + " " + word
+            }
+            if (line.isNotEmpty()) lines.add(line)
+            return lines.ifEmpty { listOf("") }
+        }
+    }
+}

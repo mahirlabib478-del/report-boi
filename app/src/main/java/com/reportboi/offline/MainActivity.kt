@@ -124,6 +124,14 @@ private val totalFields = listOf(
 )
 
 private fun todayIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+private fun shiftIsoDate(date: String, offsetDays: Int): String {
+    val format = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+    val calendar = Calendar.getInstance()
+    calendar.time = try { format.parse(date) ?: Date() } catch (_: Exception) { Date() }
+    calendar.add(Calendar.DAY_OF_MONTH, offsetDays)
+    val result = format.format(calendar.time)
+    return if (result > todayIso()) todayIso() else result
+}
 private fun currentMonth(): String = todayIso().take(7)
 private fun monthLabel(month: String): String = try {
     val date = SimpleDateFormat("yyyy-MM", Locale.US).parse(month) ?: Date()
@@ -333,6 +341,7 @@ private fun ReportBoiApp() {
     var selectedReportDate by remember { mutableStateOf(todayIso()) }
     var planValues by remember { mutableStateOf(jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth))) }
     var dayValues by remember { mutableStateOf(jsonToMap(root.optJSONObject("days")?.optJSONObject(selectedDay))) }
+    var dayDrafts by remember { mutableStateOf<Map<String, Map<String, String>>>(emptyMap()) }
     var pendingPdf by remember { mutableStateOf<File?>(null) }
 
     val savePdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
@@ -356,8 +365,8 @@ private fun ReportBoiApp() {
             selectedReportDate = monthDays(root, selectedMonth).lastOrNull()?.first ?: "$selectedMonth-01"
         }
     }
-    LaunchedEffect(selectedDay) {
-        dayValues = jsonToMap(root.optJSONObject("days")?.optJSONObject(selectedDay))
+    LaunchedEffect(selectedDay, root) {
+        dayValues = dayDrafts[selectedDay] ?: jsonToMap(root.optJSONObject("days")?.optJSONObject(selectedDay))
     }
 
     val navItems = listOf(
@@ -435,7 +444,8 @@ private fun ReportBoiApp() {
                 when (selectedTab) {
                     0 -> HomeScreen(selectedMonth, root,
                         onDaily = { selectedDay = todayIso(); selectedMonth = todayIso().take(7); monthInput = todayIso().take(7); selectedTab = 2 },
-                        onPlan = { selectedTab = 1 }, onReport = { selectedTab = 3 })
+                        onPlan = { selectedTab = 1 }, onReport = { selectedTab = 3 },
+                        onOpenDay = { date -> selectedDay = date; selectedMonth = date.take(7); monthInput = date.take(7); selectedTab = 2 })
                     1 -> PlanScreen(selectedMonth, planValues, { planValues = it }) {
                         val next = cloneJson(root)
                         val plans = next.optJSONObject("plans") ?: JSONObject()
@@ -443,31 +453,96 @@ private fun ReportBoiApp() {
                         saveRoot(context, next); root = next
                         Toast.makeText(context, "মাসিক পরিকল্পনা সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
                     }
-                    2 -> DailyScreen(selectedDay, dayValues, {
-                        val calendar = Calendar.getInstance()
-                        try { calendar.time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedDay) ?: Date() } catch (_: Exception) {}
-                        DatePickerDialog(context, { _, year, month, day ->
-                            val date = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
-                            selectedDay = date; selectedMonth = date.take(7); monthInput = date.take(7)
-                        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
-                    }, { dayValues = it }, {
-                        val next = cloneJson(root)
-                        val days = next.optJSONObject("days") ?: JSONObject()
-                        days.put(selectedDay, mapToJson(dayValues)); next.put("days", days)
-                        saveRoot(context, next); root = next
-                        Toast.makeText(context, "দৈনিক হিসাব সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
-                    }, {
-                        val next = cloneJson(root)
-                        val days = next.optJSONObject("days") ?: JSONObject()
-                        days.remove(selectedDay); next.put("days", days)
-                        saveRoot(context, next); root = next; dayValues = emptyMap()
-                        Toast.makeText(context, "এই দিনের হিসাব মুছে দেওয়া হয়েছে", Toast.LENGTH_SHORT).show()
-                    })
+                    2 -> DailyScreen(
+                        date = selectedDay,
+                        values = dayValues,
+                        onPickDate = {
+                            val calendar = Calendar.getInstance()
+                            try { calendar.time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedDay) ?: Date() } catch (_: Exception) {}
+                            val dialog = DatePickerDialog(context, { _, year, month, day ->
+                                val date = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                                selectedDay = date
+                                selectedMonth = date.take(7)
+                                monthInput = date.take(7)
+                            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+                            dialog.datePicker.maxDate = System.currentTimeMillis()
+                            dialog.show()
+                        },
+                        onShiftDate = { delta ->
+                            val date = shiftIsoDate(selectedDay, delta)
+                            selectedDay = date
+                            selectedMonth = date.take(7)
+                            monthInput = date.take(7)
+                        },
+                        onToday = {
+                            val date = todayIso()
+                            selectedDay = date
+                            selectedMonth = date.take(7)
+                            monthInput = date.take(7)
+                        },
+                        valuesChange = { updated -> dayValues = updated; dayDrafts = dayDrafts + (selectedDay to updated) },
+                        onSave = {
+                            val next = cloneJson(root)
+                            val days = next.optJSONObject("days") ?: JSONObject()
+                            val existed = days.has(selectedDay)
+                            days.put(selectedDay, mapToJson(dayValues))
+                            next.put("days", days)
+                            dayDrafts = dayDrafts - selectedDay
+                            saveRoot(context, next)
+                            root = next
+                            val message = when {
+                                existed && selectedDay < todayIso() -> "আগের দিনের হিসাব আপডেট হয়েছে"
+                                existed -> "দৈনিক হিসাব আপডেট হয়েছে"
+                                selectedDay < todayIso() -> "আগের দিনের হিসাব সংরক্ষণ হয়েছে"
+                                else -> "দৈনিক হিসাব সংরক্ষণ হয়েছে"
+                            }
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        },
+                        onClear = {
+                            val next = cloneJson(root)
+                            val days = next.optJSONObject("days") ?: JSONObject()
+                            days.remove(selectedDay)
+                            next.put("days", days)
+                            dayDrafts = dayDrafts - selectedDay
+                            saveRoot(context, next)
+                            root = next
+                            dayValues = emptyMap()
+                            Toast.makeText(context, "এই দিনের হিসাব মুছে দেওয়া হয়েছে", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                     3 -> ReportScreen(
                         month = selectedMonth,
                         root = root,
                         selectedDate = selectedReportDate,
                         onSelectDate = { selectedReportDate = it },
+                        onSaveSnapshotPdf = {
+                            try {
+                                val file = PdfReport.createMonthlySnapshot(context, selectedMonth, jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth)), monthDays(root, selectedMonth))
+                                pendingPdf = file
+                                savePdfLauncher.launch("Report-Boi-Summary-" + selectedMonth + ".pdf")
+                            } catch (_: Exception) { Toast.makeText(context, "একনজরে রিপোর্ট PDF তৈরি করা যায়নি", Toast.LENGTH_LONG).show() }
+                        },
+                        onShareSnapshotPdf = {
+                            try {
+                                val file = PdfReport.createMonthlySnapshot(context, selectedMonth, jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth)), monthDays(root, selectedMonth))
+                                val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"; putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "একনজরে মাসিক রিপোর্ট শেয়ার করুন"))
+                            } catch (_: Exception) { Toast.makeText(context, "একনজরে রিপোর্ট PDF শেয়ার করা যায়নি", Toast.LENGTH_LONG).show() }
+                        },
+                        onPrintSnapshot = {
+                            try {
+                                val file = PdfReport.createMonthlySnapshot(context, selectedMonth, jsonToMap(root.optJSONObject("plans")?.optJSONObject(selectedMonth)), monthDays(root, selectedMonth))
+                                val manager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                                manager.print("Report-Boi-Summary-" + selectedMonth, LocalPdfPrintAdapter(file),
+                                    PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                        .setResolution(PrintAttributes.Resolution("report_boi", "Report Boi", 300, 300))
+                                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS).build())
+                            } catch (_: Exception) { Toast.makeText(context, "একনজরে রিপোর্ট প্রিন্ট শুরু করা যায়নি", Toast.LENGTH_LONG).show() }
+                        },
                         onPickDate = {
                             val calendar = Calendar.getInstance()
                             try { calendar.time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedReportDate) ?: Date() } catch (_: Exception) {}
@@ -553,7 +628,7 @@ private fun ReportBoiApp() {
 }
 
 @Composable
-private fun HomeScreen(month: String, root: JSONObject, onDaily: () -> Unit, onPlan: () -> Unit, onReport: () -> Unit) {
+private fun HomeScreen(month: String, root: JSONObject, onDaily: () -> Unit, onPlan: () -> Unit, onReport: () -> Unit, onOpenDay: (String) -> Unit) {
     val days = monthDays(root, month)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = Green), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
@@ -582,9 +657,18 @@ private fun HomeScreen(month: String, root: JSONObject, onDaily: () -> Unit, onP
         SectionCard("সাম্প্রতিক হিসাব", "এই মাসের সর্বশেষ ৫টি রেকর্ড") {
             if (days.isEmpty()) Text("এখনো কোনো দৈনিক হিসাব নেই। “দৈনিক” ট্যাব থেকে শুরু করুন।", color = Muted, fontSize = 13.sp)
             else days.takeLast(5).asReversed().forEach { item ->
-                Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
-                    Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · পড়াশোনা " + numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).clickable { onOpenDay(item.first) }
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Icon(Icons.Default.EditNote, contentDescription = "রিপোর্ট সম্পাদনা", tint = Green, modifier = Modifier.size(21.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · পড়াশোনা " + numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
+                    }
+                    Text("খুলুন", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
                 Divider(color = Border)
             }
@@ -654,26 +738,83 @@ private fun PlanScreen(month: String, values: Map<String, String>, onChange: (Ma
     }
 }
 @Composable
-private fun DailyScreen(date: String, values: Map<String, String>, onPickDate: () -> Unit, valuesChange: (Map<String, String>) -> Unit, onSave: () -> Unit, onClear: () -> Unit) {
+private fun DailyScreen(
+    date: String,
+    values: Map<String, String>,
+    onPickDate: () -> Unit,
+    onShiftDate: (Int) -> Unit,
+    onToday: () -> Unit,
+    valuesChange: (Map<String, String>) -> Unit,
+    onSave: () -> Unit,
+    onClear: () -> Unit
+) {
+    val isPastDate = date < todayIso()
+    val hasSavedRecord = values.isNotEmpty()
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
     ) {
-        item(key = "daily_heading") { PageHeading("দৈনিক হিসাব", "প্রতিদিনের কাজ ও অভ্যাস লিখুন") }
+        item(key = "daily_heading") {
+            PageHeading("দৈনিক হিসাব", "প্রতিদিনের কাজ ও অভ্যাস লিখুন")
+        }
         item(key = "daily_date") {
-            SectionCard("হিসাবের তারিখ", "যে দিনের তথ্য লিখবেন, তারিখ নির্বাচন করুন") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            SectionCard("হিসাবের তারিখ", "আজ অথবা আগের দিনের তথ্য লিখুন") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
-                    Text(date, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                    TextButton(onClick = onPickDate) { Text("তারিখ বদলান") }
+                    Column(Modifier.weight(1f)) {
+                        Text("নির্বাচিত তারিখ", color = Muted, fontSize = 11.sp)
+                        Text(date, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    TextButton(onClick = onPickDate) { Text("ক্যালেন্ডার") }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { onShiftDate(-1) }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                        Text("← আগের দিন", fontSize = 12.sp, maxLines = 1)
+                    }
+                    OutlinedButton(onClick = onToday, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                        Text("আজ", fontSize = 12.sp)
+                    }
+                    OutlinedButton(onClick = { onShiftDate(1) }, enabled = date < todayIso(), modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)) {
+                        Text("পরের দিন →", fontSize = 12.sp, maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (isPastDate) Mint else CanvasBg).padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(if (isPastDate) Icons.Default.CalendarMonth else Icons.Default.CheckCircle, contentDescription = null, tint = Green, modifier = Modifier.size(18.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when {
+                                isPastDate && hasSavedRecord -> "আগের দিনের রিপোর্ট পাওয়া গেছে"
+                                isPastDate -> "আগের দিনের রিপোর্ট লিখছেন"
+                                hasSavedRecord -> "আজকের রিপোর্ট সংরক্ষিত আছে"
+                                else -> "নতুন রিপোর্ট"
+                            },
+                            color = Forest, fontWeight = FontWeight.SemiBold, fontSize = 12.sp
+                        )
+                        Text(
+                            when {
+                                isPastDate && hasSavedRecord -> "তথ্য পরিবর্তন করে সংরক্ষণ করলে আগের রিপোর্ট আপডেট হবে।"
+                                isPastDate -> "তথ্য লিখে সংরক্ষণ করুন; এটি ওই তারিখেই থাকবে।"
+                                else -> "সংরক্ষণ করলে তথ্য এই ফোনেই থাকবে।"
+                            },
+                            color = Muted, fontSize = 11.sp
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
         }
         items(dailyGroups, key = { it.title }) { group -> FieldGroupCard(group, values, valuesChange) }
         item(key = "daily_actions") {
-            PrimaryAction("দৈনিক হিসাব সংরক্ষণ", Icons.Default.Save, onSave)
-            TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) { Text("এই দিনের হিসাব মুছুন", color = Color(0xFFB0443E)) }
+            PrimaryAction(if (hasSavedRecord) "হিসাব সংরক্ষণ / আপডেট" else "দৈনিক হিসাব সংরক্ষণ", Icons.Default.Save, onSave)
+            TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) {
+                Text("এই দিনের হিসাব মুছুন", color = Color(0xFFB0443E))
+            }
             Spacer(Modifier.height(10.dp))
         }
     }
@@ -718,7 +859,10 @@ private fun ReportScreen(
     onPrintDaily: () -> Unit,
     onSaveMonthlyPdf: () -> Unit,
     onShareMonthlyPdf: () -> Unit,
-    onPrintMonthly: () -> Unit
+    onPrintMonthly: () -> Unit,
+    onSaveSnapshotPdf: () -> Unit,
+    onShareSnapshotPdf: () -> Unit,
+    onPrintSnapshot: () -> Unit
 ) {
     val days = remember(root, month) { monthDays(root, month) }
     val plan = remember(root, month) { jsonToMap(root.optJSONObject("plans")?.optJSONObject(month)) }
@@ -744,6 +888,13 @@ private fun ReportScreen(
         }
         items(summarySections, key = { "summary_" + it.title }) { section ->
             SectionCard(section.title) { section.rows.forEach { (label, value) -> ReportRow(label, value) } }
+        }
+        item(key = "summary_export") {
+            SectionCard("একনজরে রিপোর্ট Export", "শুধু মাসিক সারাংশ PDF হিসেবে সংরক্ষণ, শেয়ার বা প্রিন্ট করুন") {
+                PrimaryAction("একনজরে মাসিক PDF সংরক্ষণ", Icons.Default.PictureAsPdf, onSaveSnapshotPdf)
+                SecondaryAction("মাসিক সারাংশ শেয়ার", onShareSnapshotPdf)
+                SecondaryAction("মাসিক সারাংশ প্রিন্ট", onPrintSnapshot, Icons.Default.Print)
+            }
         }
         item(key = "daily_report") {
             SectionCard("তারিখভিত্তিক রিপোর্ট", "প্রতিটি তারিখের রিপোর্ট আলাদা করে দেখুন, PDF করুন বা প্রিন্ট করুন") {
@@ -916,6 +1067,29 @@ private class LocalPdfPrintAdapter(private val file: File) : PrintDocumentAdapte
 }
 
 private object PdfReport {
+    fun createMonthlySnapshot(context: Context, month: String, plan: Map<String, String>, days: List<Pair<String, Map<String, String>>>): File {
+        val document = PdfDocument()
+        val writer = Writer(document, month)
+        writer.title("একনজরে মাসিক রিপোর্ট")
+        writer.text("মাস: " + monthLabel(month), 12f, true, Forest.toArgb())
+        writer.text("মোট রিপোর্টের দিন: " + numberBn(days.size), 10f)
+        writer.text("কুরআন: " + numberBn(dailyTotal(days, "quranAyat")) + " আয়াত  |  হাদিস: " + numberBn(dailyTotal(days, "hadithCount")) + " টি", 10f)
+        writer.space(8f)
+        monthlySnapshotSections(days, plan).forEach { section ->
+            writer.section(section.title)
+            section.rows.forEach { (label, value) -> writer.row(label, value) }
+            writer.space(4f)
+        }
+        writer.space(14f)
+        writer.text("দায়িত্বশীলের পরামর্শ ও মন্তব্য: __________________________________")
+        writer.text("স্বাক্ষর: __________________________    তারিখ: __________________")
+        writer.finish()
+        val file = File(context.cacheDir, "report-boi-summary-" + month + ".pdf")
+        FileOutputStream(file).use { document.writeTo(it) }
+        document.close()
+        return file
+    }
+
     fun createDaily(context: Context, date: String, values: Map<String, String>): File {
         val document = PdfDocument()
         val writer = Writer(document, date.take(7))

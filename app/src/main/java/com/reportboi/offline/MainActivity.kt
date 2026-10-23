@@ -1001,19 +1001,17 @@ private fun ReportScreen(
     val plan = remember(root, month) { jsonToMap(root.optJSONObject("plans")?.optJSONObject(month)) }
     val selectedValues = remember(root, selectedDate) { root.optJSONObject("days")?.optJSONObject(selectedDate) }
     val summarySections = remember(days, plan) { monthlySnapshotSections(days, plan) }
-    val filledPlanGroups = remember(plan) {
-        planGroups.mapNotNull { group ->
-            val entries = group.fields.filter { !plan[it.key].isNullOrBlank() }
-            if (entries.isEmpty()) null else group to entries
-        }
-    }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(key = "report_heading") { PageHeading("দৈনিক ও মাসিক রিপোর্ট", monthLabel(month) + " · " + numberBn(days.size) + " দিনের রেকর্ড") }
+        item(key = "report_heading") { PageHeading("একনজরে মাসিক রিপোর্ট", monthLabel(month) + " · " + numberBn(days.size) + " দিনের রেকর্ড") }
+        item(key = "report_scope_note") {
+            SectionCard("মাসিক রিপোর্ট", "দৈনিক হিসাবের মোট, গড় ও তারিখভিত্তিক রেকর্ড") {
+                Text("মাসিক পরিকল্পনা আলাদা “পরিকল্পনা” ট্যাবে রাখা হয়েছে, যাতে রিপোর্ট পেজটি পরিষ্কার ও সহজ থাকে।", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+        }
         item(key = "summary_heading") {
             SectionCard("একনজরে মাসিক রিপোর্ট", "দৈনিক হিসাব থেকে মোট ও গড় স্বয়ংক্রিয়ভাবে হিসাব করা হয়েছে") {
                 Text("কাগজের মাসিক ফর্মের প্রতিটি বিভাগ নিচে আলাদা করে দেখানো হয়েছে।", color = Muted, fontSize = 12.sp)
@@ -1101,17 +1099,6 @@ private fun ReportScreen(
                         SummaryMini("পড়াশোনা", numberBn(totalFor(root, month, "textbookHours")) + " ঘ.", Modifier.weight(1f))
                     }
                 }
-            }
-        }
-        item(key = "monthly_plan_heading") {
-            SectionCard("মাসিক পরিকল্পনা", "এই মাসে নির্ধারিত লক্ষ্য") {
-                if (filledPlanGroups.isEmpty()) Text("এই মাসে এখনো পরিকল্পনা সংরক্ষণ করা হয়নি।", color = Muted, fontSize = 13.sp)
-                else Text("পরিকল্পনার বিভাগগুলো নিচে দেখুন।", color = Muted, fontSize = 12.sp)
-            }
-        }
-        items(filledPlanGroups, key = { "plan_" + it.first.title }) { (group, entries) ->
-            SectionCard(group.title) {
-                entries.forEach { field -> ReportRow(field.label, plan[field.key].orEmpty() + if (field.unit.isNotBlank()) " " + field.unit else "") }
             }
         }
         item(key = "monthly_totals") {

@@ -456,6 +456,7 @@ private fun ReportBoiApp() {
                     2 -> DailyScreen(
                         date = selectedDay,
                         values = dayValues,
+                        savedRecordExists = root.optJSONObject("days")?.has(selectedDay) == true,
                         onPickDate = {
                             val calendar = Calendar.getInstance()
                             try { calendar.time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedDay) ?: Date() } catch (_: Exception) {}
@@ -741,6 +742,7 @@ private fun PlanScreen(month: String, values: Map<String, String>, onChange: (Ma
 private fun DailyScreen(
     date: String,
     values: Map<String, String>,
+    savedRecordExists: Boolean,
     onPickDate: () -> Unit,
     onShiftDate: (Int) -> Unit,
     onToday: () -> Unit,
@@ -749,7 +751,8 @@ private fun DailyScreen(
     onClear: () -> Unit
 ) {
     val isPastDate = date < todayIso()
-    val hasSavedRecord = values.isNotEmpty()
+    val hasSavedRecord = savedRecordExists
+    var showClearConfirmation by remember(date) { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
@@ -812,8 +815,23 @@ private fun DailyScreen(
         items(dailyGroups, key = { it.title }) { group -> FieldGroupCard(group, values, valuesChange) }
         item(key = "daily_actions") {
             PrimaryAction(if (hasSavedRecord) "হিসাব সংরক্ষণ / আপডেট" else "দৈনিক হিসাব সংরক্ষণ", Icons.Default.Save, onSave)
-            TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = { showClearConfirmation = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("এই দিনের হিসাব মুছুন", color = Color(0xFFB0443E))
+            }
+            if (showClearConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showClearConfirmation = false },
+                    title = { Text("এই দিনের রিপোর্ট মুছে ফেলবেন?") },
+                    text = { Text("এই তারিখের সংরক্ষিত তথ্য মুছে যাবে। এই কাজটি পরে ফিরিয়ে আনা যাবে না।") },
+                    confirmButton = {
+                        TextButton(onClick = { showClearConfirmation = false; onClear() }) {
+                            Text("মুছে ফেলুন", color = Color(0xFFB0443E))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showClearConfirmation = false }) { Text("বাতিল") }
+                    }
+                )
             }
             Spacer(Modifier.height(10.dp))
         }

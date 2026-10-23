@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
@@ -639,33 +641,43 @@ private fun PageHeading(title: String, subtitle: String) {
 
 @Composable
 private fun PlanScreen(month: String, values: Map<String, String>, onChange: (Map<String, String>) -> Unit, onSave: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        PageHeading("মাসিক পরিকল্পনা", monthLabel(month) + " মাসের লক্ষ্য লিখুন")
-        planGroups.forEach { FieldGroupCard(it, values, onChange) }
-        PrimaryAction("পরিকল্পনা সংরক্ষণ", Icons.Default.Save, onSave)
-        Spacer(Modifier.height(10.dp))
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+    ) {
+        item(key = "plan_heading") { PageHeading("মাসিক পরিকল্পনা", monthLabel(month) + " মাসের লক্ষ্য লিখুন") }
+        items(planGroups, key = { it.title }) { group -> FieldGroupCard(group, values, onChange) }
+        item(key = "plan_save") {
+            PrimaryAction("পরিকল্পনা সংরক্ষণ", Icons.Default.Save, onSave)
+            Spacer(Modifier.height(10.dp))
+        }
     }
 }
-
 @Composable
 private fun DailyScreen(date: String, values: Map<String, String>, onPickDate: () -> Unit, valuesChange: (Map<String, String>) -> Unit, onSave: () -> Unit, onClear: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        PageHeading("দৈনিক হিসাব", "প্রতিদিনের কাজ ও অভ্যাস লিখুন")
-        SectionCard("হিসাবের তারিখ", "যে দিনের তথ্য লিখবেন, তারিখ নির্বাচন করুন") {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
-                Text(date, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                TextButton(onClick = onPickDate) { Text("তারিখ বদলান") }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+    ) {
+        item(key = "daily_heading") { PageHeading("দৈনিক হিসাব", "প্রতিদিনের কাজ ও অভ্যাস লিখুন") }
+        item(key = "daily_date") {
+            SectionCard("হিসাবের তারিখ", "যে দিনের তথ্য লিখবেন, তারিখ নির্বাচন করুন") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
+                    Text(date, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onPickDate) { Text("তারিখ বদলান") }
+                }
             }
+            Spacer(Modifier.height(12.dp))
         }
-        Spacer(Modifier.height(12.dp))
-        dailyGroups.forEach { FieldGroupCard(it, values, valuesChange) }
-        PrimaryAction("দৈনিক হিসাব সংরক্ষণ", Icons.Default.Save, onSave)
-        TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) { Text("এই দিনের হিসাব মুছুন", color = Color(0xFFB0443E)) }
-        Spacer(Modifier.height(10.dp))
+        items(dailyGroups, key = { it.title }) { group -> FieldGroupCard(group, values, valuesChange) }
+        item(key = "daily_actions") {
+            PrimaryAction("দৈনিক হিসাব সংরক্ষণ", Icons.Default.Save, onSave)
+            TextButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) { Text("এই দিনের হিসাব মুছুন", color = Color(0xFFB0443E)) }
+            Spacer(Modifier.height(10.dp))
+        }
     }
 }
-
 @Composable
 private fun FieldGroupCard(group: FieldGroup, values: Map<String, String>, onChange: (Map<String, String>) -> Unit) {
     SectionCard(group.title) {
@@ -708,135 +720,147 @@ private fun ReportScreen(
     onShareMonthlyPdf: () -> Unit,
     onPrintMonthly: () -> Unit
 ) {
-    val days = monthDays(root, month)
-    val plan = jsonToMap(root.optJSONObject("plans")?.optJSONObject(month))
-    val selectedValues = root.optJSONObject("days")?.optJSONObject(selectedDate)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        PageHeading("দৈনিক ও মাসিক রিপোর্ট", monthLabel(month) + " · " + numberBn(days.size) + " দিনের রেকর্ড")
+    val days = remember(root, month) { monthDays(root, month) }
+    val plan = remember(root, month) { jsonToMap(root.optJSONObject("plans")?.optJSONObject(month)) }
+    val selectedValues = remember(root, selectedDate) { root.optJSONObject("days")?.optJSONObject(selectedDate) }
+    val summarySections = remember(days, plan) { monthlySnapshotSections(days, plan) }
+    val filledPlanGroups = remember(plan) {
+        planGroups.mapNotNull { group ->
+            val entries = group.fields.filter { !plan[it.key].isNullOrBlank() }
+            if (entries.isEmpty()) null else group to entries
+        }
+    }
 
-        SectionCard("একনজরে মাসিক রিপোর্ট", "দৈনিক হিসাব থেকে মোট ও গড় স্বয়ংক্রিয়ভাবে হিসাব করা হয়েছে") {
-            monthlySnapshotSections(days, plan).forEach { section ->
-                Text(section.title, color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
-                section.rows.forEach { (label, value) -> ReportRow(label, value) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(key = "report_heading") { PageHeading("দৈনিক ও মাসিক রিপোর্ট", monthLabel(month) + " · " + numberBn(days.size) + " দিনের রেকর্ড") }
+        item(key = "summary_heading") {
+            SectionCard("একনজরে মাসিক রিপোর্ট", "দৈনিক হিসাব থেকে মোট ও গড় স্বয়ংক্রিয়ভাবে হিসাব করা হয়েছে") {
+                Text("কাগজের মাসিক ফর্মের প্রতিটি বিভাগ নিচে আলাদা করে দেখানো হয়েছে।", color = Muted, fontSize = 12.sp)
             }
         }
-        Spacer(Modifier.height(14.dp))
-
-        SectionCard("তারিখভিত্তিক রিপোর্ট", "প্রতিটি তারিখের রিপোর্ট আলাদা করে দেখুন, PDF করুন বা প্রিন্ট করুন") {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("নির্বাচিত তারিখ", color = Muted, fontSize = 11.sp)
-                    Text(selectedDate, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-                TextButton(onClick = onPickDate) { Text("তারিখ বাছুন") }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("এই মাসের সংরক্ষিত তারিখ", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-            if (days.isEmpty()) {
-                Text("এই মাসে কোনো দৈনিক হিসাব সংরক্ষণ করা হয়নি। প্রথমে “দৈনিক” ট্যাবে হিসাব লিখে সংরক্ষণ করুন।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
-            } else {
-                days.forEach { item ->
-                    val date = item.first
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 5.dp).clip(RoundedCornerShape(11.dp))
-                            .background(if (date == selectedDate) Mint else Color.Transparent)
-                            .clickable { onSelectDate(date) }.padding(horizontal = 10.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = if (date == selectedDate) Forest else Muted, modifier = Modifier.size(19.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(date, color = if (date == selectedDate) Forest else Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " টি", color = Muted, fontSize = 11.sp)
-                        }
-                        if (date == selectedDate) Icon(Icons.Default.CheckCircle, contentDescription = "নির্বাচিত", tint = Green, modifier = Modifier.size(19.dp))
+        items(summarySections, key = { "summary_" + it.title }) { section ->
+            SectionCard(section.title) { section.rows.forEach { (label, value) -> ReportRow(label, value) } }
+        }
+        item(key = "daily_report") {
+            SectionCard("তারিখভিত্তিক রিপোর্ট", "প্রতিটি তারিখের রিপোর্ট আলাদা করে দেখুন, PDF করুন বা প্রিন্ট করুন") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Today, contentDescription = null, tint = Green, modifier = Modifier.size(23.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("নির্বাচিত তারিখ", color = Muted, fontSize = 11.sp)
+                        Text(selectedDate, color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
+                    TextButton(onClick = onPickDate) { Text("তারিখ বাছুন") }
                 }
-            }
-            Spacer(Modifier.height(12.dp))
-            Divider(color = Border)
-            Spacer(Modifier.height(10.dp))
-            Text("নির্বাচিত দিনের বিস্তারিত", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            if (selectedValues == null) {
-                Text("এই তারিখে এখনো রিপোর্ট নেই। “দৈনিক” ট্যাবে গিয়ে তারিখটি নির্বাচন করে তথ্য লিখুন এবং সংরক্ষণ করুন।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
-            } else {
-                var hasAny = false
-                dailyGroups.forEach { group ->
-                    val filled = group.fields.filter {
-                        val value = selectedValues.optString(it.key, "")
-                        value.isNotBlank() && value != "false"
-                    }
-                    if (filled.isNotEmpty()) {
-                        hasAny = true
-                        Text(group.title, color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 3.dp))
-                        filled.forEach { field ->
-                            val raw = selectedValues.optString(field.key, "")
-                            ReportRow(field.label, if (field.type == FieldType.CHECK) "হ্যাঁ" else raw + if (field.unit.isNotBlank()) " " + field.unit else "")
+                Spacer(Modifier.height(8.dp))
+                Text("এই মাসের সংরক্ষিত তারিখ", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                if (days.isEmpty()) {
+                    Text("এই মাসে কোনো দৈনিক হিসাব সংরক্ষণ করা হয়নি। প্রথমে “দৈনিক” ট্যাবে হিসাব লিখে সংরক্ষণ করুন।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
+                } else {
+                    days.forEach { item ->
+                        val date = item.first
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 5.dp).clip(RoundedCornerShape(11.dp))
+                                .background(if (date == selectedDate) Mint else Color.Transparent)
+                                .clickable { onSelectDate(date) }.padding(horizontal = 10.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
+                        ) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = if (date == selectedDate) Forest else Muted, modifier = Modifier.size(19.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(date, color = if (date == selectedDate) Forest else Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " টি", color = Muted, fontSize = 11.sp)
+                            }
+                            if (date == selectedDate) Icon(Icons.Default.CheckCircle, contentDescription = "নির্বাচিত", tint = Green, modifier = Modifier.size(19.dp))
                         }
                     }
                 }
-                if (!hasAny) Text("এই তারিখে রিপোর্ট সংরক্ষিত আছে, তবে কোনো তথ্য পূরণ করা হয়নি।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                 Spacer(Modifier.height(12.dp))
-                PrimaryAction("এই দিনের PDF সংরক্ষণ", Icons.Default.PictureAsPdf, onSaveDailyPdf)
-                SecondaryAction("এই দিনের PDF শেয়ার", onShareDailyPdf)
-                SecondaryAction("এই দিনের রিপোর্ট প্রিন্ট", onPrintDaily, Icons.Default.Print)
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = Forest), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp)) {
-                Text("মাসের সারাংশ", color = Color.White.copy(alpha = .78f), fontSize = 12.sp)
-                Text(monthLabel(month), color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryMini("রেকর্ডের দিন", numberBn(days.size), Modifier.weight(1f))
-                    SummaryMini("কুরআন", numberBn(totalFor(root, month, "quranAyat")), Modifier.weight(1f))
-                    SummaryMini("পড়াশোনা", numberBn(totalFor(root, month, "textbookHours")) + " ঘ.", Modifier.weight(1f))
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        SectionCard("মাসিক পরিকল্পনা", "এই মাসে নির্ধারিত লক্ষ্য") {
-            var count = 0
-            planGroups.forEach { group ->
-                val entries = group.fields.filter { !plan[it.key].isNullOrBlank() }
-                if (entries.isNotEmpty()) {
-                    count += entries.size
-                    Text(group.title, color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                    entries.forEach { field -> ReportRow(field.label, plan[field.key].orEmpty() + if (field.unit.isNotBlank()) " " + field.unit else "") }
-                }
-            }
-            if (count == 0) Text("এই মাসে এখনো পরিকল্পনা সংরক্ষণ করা হয়নি।", color = Muted, fontSize = 13.sp)
-        }
-        Spacer(Modifier.height(12.dp))
-        SectionCard("মাসের মোট কাজ", "দৈনিক রেকর্ড থেকে হিসাব করা হয়েছে") {
-            totalFields.forEach { field -> ReportRow(field.label, numberBn(totalFor(root, month, field.key)) + if (field.unit.isNotBlank()) " " + field.unit else "") }
-            ReportRow("পত্রিকা পাঠ", numberBn(days.count { it.second["magazineRead"] == "true" }) + " দিন")
-            ReportRow("শরীরচর্চা", numberBn(days.count { it.second["exerciseDone"] == "true" }) + " দিন")
-            ReportRow("আত্মসমালোচনা", numberBn(days.count { it.second["selfReviewDone"] == "true" }) + " দিন")
-        }
-        Spacer(Modifier.height(12.dp))
-        SectionCard("দৈনিক রেকর্ডের তালিকা", "তারিখে চাপ দিলে উপরের বিস্তারিত রিপোর্ট নির্বাচন হবে") {
-            if (days.isEmpty()) Text("এই মাসে কোনো দৈনিক হিসাব নেই।", color = Muted, fontSize = 13.sp)
-            days.forEach { item ->
-                Column(Modifier.fillMaxWidth().clickable { onSelectDate(item.first) }.padding(vertical = 8.dp)) {
-                    Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · সাহিত্য " + numberBn((item.second["literatureIslamic"]?.toDoubleOrNull() ?: 0.0) + (item.second["literatureOther"]?.toDoubleOrNull() ?: 0.0)) + " পৃষ্ঠা · পড়াশোনা " + numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
-                }
                 Divider(color = Border)
+                Spacer(Modifier.height(10.dp))
+                Text("নির্বাচিত দিনের বিস্তারিত", color = Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                if (selectedValues == null) {
+                    Text("এই তারিখে এখনো রিপোর্ট নেই। “দৈনিক” ট্যাবে গিয়ে তারিখটি নির্বাচন করে তথ্য লিখুন এবং সংরক্ষণ করুন।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
+                } else {
+                    var hasAny = false
+                    dailyGroups.forEach { group ->
+                        val filled = group.fields.filter {
+                            val value = selectedValues.optString(it.key, "")
+                            value.isNotBlank() && value != "false"
+                        }
+                        if (filled.isNotEmpty()) {
+                            hasAny = true
+                            Text(group.title, color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp, bottom = 3.dp))
+                            filled.forEach { field ->
+                                val raw = selectedValues.optString(field.key, "")
+                                ReportRow(field.label, if (field.type == FieldType.CHECK) "হ্যাঁ" else raw + if (field.unit.isNotBlank()) " " + field.unit else "")
+                            }
+                        }
+                    }
+                    if (!hasAny) Text("এই তারিখে রিপোর্ট সংরক্ষিত আছে, তবে কোনো তথ্য পূরণ করা হয়নি।", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                    Spacer(Modifier.height(12.dp))
+                    PrimaryAction("এই দিনের PDF সংরক্ষণ", Icons.Default.PictureAsPdf, onSaveDailyPdf)
+                    SecondaryAction("এই দিনের PDF শেয়ার", onShareDailyPdf)
+                    SecondaryAction("এই দিনের রিপোর্ট প্রিন্ট", onPrintDaily, Icons.Default.Print)
+                }
             }
         }
-        Spacer(Modifier.height(14.dp))
-        PrimaryAction("পুরো মাসের PDF সংরক্ষণ", Icons.Default.PictureAsPdf, onSaveMonthlyPdf)
-        SecondaryAction("পুরো মাসের PDF শেয়ার", onShareMonthlyPdf)
-        SecondaryAction("পুরো মাসের রিপোর্ট প্রিন্ট", onPrintMonthly, Icons.Default.Print)
-        Spacer(Modifier.height(18.dp))
+        item(key = "monthly_overview_card") {
+            Card(colors = CardDefaults.cardColors(containerColor = Forest), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("মাসের সারাংশ", color = Color.White.copy(alpha = .78f), fontSize = 12.sp)
+                    Text(monthLabel(month), color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryMini("রেকর্ডের দিন", numberBn(days.size), Modifier.weight(1f))
+                        SummaryMini("কুরআন", numberBn(totalFor(root, month, "quranAyat")), Modifier.weight(1f))
+                        SummaryMini("পড়াশোনা", numberBn(totalFor(root, month, "textbookHours")) + " ঘ.", Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+        item(key = "monthly_plan_heading") {
+            SectionCard("মাসিক পরিকল্পনা", "এই মাসে নির্ধারিত লক্ষ্য") {
+                if (filledPlanGroups.isEmpty()) Text("এই মাসে এখনো পরিকল্পনা সংরক্ষণ করা হয়নি।", color = Muted, fontSize = 13.sp)
+                else Text("পরিকল্পনার বিভাগগুলো নিচে দেখুন।", color = Muted, fontSize = 12.sp)
+            }
+        }
+        items(filledPlanGroups, key = { "plan_" + it.first.title }) { (group, entries) ->
+            SectionCard(group.title) {
+                entries.forEach { field -> ReportRow(field.label, plan[field.key].orEmpty() + if (field.unit.isNotBlank()) " " + field.unit else "") }
+            }
+        }
+        item(key = "monthly_totals") {
+            SectionCard("মাসের মোট কাজ", "দৈনিক রেকর্ড থেকে হিসাব করা হয়েছে") {
+                totalFields.forEach { field -> ReportRow(field.label, numberBn(totalFor(root, month, field.key)) + if (field.unit.isNotBlank()) " " + field.unit else "") }
+                ReportRow("পত্রিকা পাঠ", numberBn(days.count { it.second["magazineRead"] == "true" }) + " দিন")
+                ReportRow("শরীরচর্চা", numberBn(days.count { it.second["exerciseDone"] == "true" }) + " দিন")
+                ReportRow("আত্মসমালোচনা", numberBn(days.count { it.second["selfReviewDone"] == "true" }) + " দিন")
+            }
+        }
+        item(key = "daily_records_list") {
+            SectionCard("দৈনিক রেকর্ডের তালিকা", "তারিখে চাপ দিলে নির্বাচিত দিনের রিপোর্ট দেখাবে") {
+                if (days.isEmpty()) Text("এই মাসে কোনো দৈনিক হিসাব নেই।", color = Muted, fontSize = 13.sp)
+                days.forEach { item ->
+                    Column(Modifier.fillMaxWidth().clickable { onSelectDate(item.first) }.padding(vertical = 8.dp)) {
+                        Text(item.first, color = Forest, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("কুরআন " + numberBn(item.second["quranAyat"]?.toDoubleOrNull() ?: 0.0) + " আয়াত · হাদিস " + numberBn(item.second["hadithCount"]?.toDoubleOrNull() ?: 0.0) + " · সাহিত্য " + numberBn((item.second["literatureIslamic"]?.toDoubleOrNull() ?: 0.0) + (item.second["literatureOther"]?.toDoubleOrNull() ?: 0.0)) + " পৃষ্ঠা · পড়াশোনা " + numberBn(item.second["textbookHours"]?.toDoubleOrNull() ?: 0.0) + " ঘণ্টা", color = Muted, fontSize = 12.sp)
+                    }
+                    Divider(color = Border)
+                }
+            }
+        }
+        item(key = "monthly_pdf_actions") {
+            PrimaryAction("পুরো মাসের PDF সংরক্ষণ", Icons.Default.PictureAsPdf, onSaveMonthlyPdf)
+            SecondaryAction("পুরো মাসের PDF শেয়ার", onShareMonthlyPdf)
+            SecondaryAction("পুরো মাসের রিপোর্ট প্রিন্ট", onPrintMonthly, Icons.Default.Print)
+            Spacer(Modifier.height(18.dp))
+        }
     }
 }
-
 @Composable
 private fun ReportRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {

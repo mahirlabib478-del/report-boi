@@ -80,8 +80,8 @@ export default function App(){
   const member=useMemo(()=>data.members.find(m=>m.id===data.activeMemberId)||data.members[0], [data]);
   const dates=useMemo(()=>Object.keys(member?.days||{}).filter(d=>d.indexOf(month)===0).sort(),[member,month]);
 
-  useEffect(()=>{if(member)setPlanDraft((member.plans||{})[month]||{});},[data.activeMemberId,month,loaded]);
-  useEffect(()=>{if(member)setDailyDraft((member.days||{})[day]||{});},[data.activeMemberId,day,loaded]);
+  useEffect(()=>{if(member)setPlanDraft((member.plans||{})[month]||{});},[member,month,loaded]);
+  useEffect(()=>{if(member)setDailyDraft((member.days||{})[day]||{});},[member,day,loaded]);
 
   const updateMember=(fn)=>setData(prev=>({...prev,members:prev.members.map(m=>m.id===prev.activeMemberId?fn(m):m)}));
   const savePlan=()=>{updateMember(m=>({...m,plans:{...(m.plans||{}),[month]:planDraft}}));Alert.alert('সংরক্ষণ হয়েছে','মাসিক পরিকল্পনা এই ফোনে সংরক্ষিত হয়েছে।');};

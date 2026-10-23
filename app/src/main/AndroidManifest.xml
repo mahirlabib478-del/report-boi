@@ -3,6 +3,8 @@
     <application
         android:allowBackup="false"
         android:label="রিপোর্ট বই"
+        android:icon="@drawable/ic_report_boi_logo"
+        android:roundIcon="@drawable/ic_report_boi_logo"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true">

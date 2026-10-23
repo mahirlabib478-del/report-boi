@@ -649,7 +649,7 @@ private fun HomeScreen(month: String, root: JSONObject, onDaily: () -> Unit, onP
         Text("দ্রুত কাজ", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
         Spacer(Modifier.height(9.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickCard("দৈনিক হিসাব", "আজকের কাজ লিখুন", Icons.Default.EditNote, onDaily, Modifier.weight(1f))
+            QuickCard("দৈনিক হিসাব", "আজ বা আগের দিনের কাজ", Icons.Default.EditNote, onDaily, Modifier.weight(1f))
             QuickCard("মাসিক পরিকল্পনা", "লক্ষ্য নির্ধারণ", Icons.Default.CalendarMonth, onPlan, Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
@@ -902,17 +902,14 @@ private fun ReportScreen(
         item(key = "summary_heading") {
             SectionCard("একনজরে মাসিক রিপোর্ট", "দৈনিক হিসাব থেকে মোট ও গড় স্বয়ংক্রিয়ভাবে হিসাব করা হয়েছে") {
                 Text("কাগজের মাসিক ফর্মের প্রতিটি বিভাগ নিচে আলাদা করে দেখানো হয়েছে।", color = Muted, fontSize = 12.sp)
-            }
-        }
-        items(summarySections, key = { "summary_" + it.title }) { section ->
-            SectionCard(section.title) { section.rows.forEach { (label, value) -> ReportRow(label, value) } }
-        }
-        item(key = "summary_export") {
-            SectionCard("একনজরে রিপোর্ট Export", "শুধু মাসিক সারাংশ PDF হিসেবে সংরক্ষণ, শেয়ার বা প্রিন্ট করুন") {
+                Spacer(Modifier.height(8.dp))
                 PrimaryAction("একনজরে মাসিক PDF সংরক্ষণ", Icons.Default.PictureAsPdf, onSaveSnapshotPdf)
                 SecondaryAction("মাসিক সারাংশ শেয়ার", onShareSnapshotPdf)
                 SecondaryAction("মাসিক সারাংশ প্রিন্ট", onPrintSnapshot, Icons.Default.Print)
             }
+        }
+        items(summarySections, key = { "summary_" + it.title }) { section ->
+            SectionCard(section.title) { section.rows.forEach { (label, value) -> ReportRow(label, value) } }
         }
         item(key = "daily_report") {
             SectionCard("তারিখভিত্তিক রিপোর্ট", "প্রতিটি তারিখের রিপোর্ট আলাদা করে দেখুন, PDF করুন বা প্রিন্ট করুন") {
